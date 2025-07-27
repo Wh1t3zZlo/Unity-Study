@@ -9314,7 +9314,7 @@ AddressablesMgr.Instance.LoadAssetAsync<Object>(Addressables.MergeMode.Intersect
 
 
 
-三、 模拟远端发布资源
+##### 三、 模拟远端发布资源
 
 模拟远端发布用于在本地开发环境中测试热更新功能，而无需实际部署到远程服务器。
 
@@ -9484,9 +9484,7 @@ using UnityEngine.InputSystem;
 
 void Start()
 {
-    #region 知识点一 获取当前键盘设备
     Keyboard keyBoard = Keyboard.current;
-    #endregion
 }
 ```
 
@@ -9624,7 +9622,7 @@ mouse.scroll.ReadValue();
 
 **得到鼠标点击的场景中的对象**
 
-```
+```c#
 if( Mouse.current.leftButton.wasPressedThisFrame )
 {
 	RaycastHit info;
@@ -9766,57 +9764,1085 @@ switch (tp)
 
 [思维导图](https://www.mubu.com/doc/4GaKgqtEklg)
 
-#### 使用
 
-```c#
-//1.启用输入检测
-move.Enable();
 
-//2.操作监听相关
-//开始操作
-move.started += TestFun;
+#### InputAction 是什么？
 
-//真正触发
-move.performed += (context) =>
-{
-	print("触发事件调用");
-    //当前状态
-	//没有启用 Disabled
-	//等待 Waiting
-	//开始 Started
-	//触发 Performed
-	//结束 Canceled
-	//context.phase
-	print(context.phase);
+- **定义：** `InputAction` 是 Input System 帮助我们封装的**输入动作类**。
 
-	//动作行为信息 
-	print(context.action.name);
+- **主要作用：**
 
-	//控件(设备)信息
-	print(context.control.name);
+	- 它**不需要我们通过写代码的形式来直接处理输入**（例如，不再需要频繁在 `Update` 中检查 `Input.GetKey()`）。
+	- 而是让我们直接在 **Inspector 窗口中编辑和配置**输入（例如，将 WASD 绑定到 `Move` 动作）。
+	- 当配置的输入被触发时，我们只需要把精力花在**输入触发后的逻辑处理**上（通过事件订阅）。
 
-	//获取值
-	//context.ReadValue<float>
+- **声明方式：**
 
- 	//持续时间
-	print(context.duration);
+	- 在想要用于处理输入动作的类中，声明对应的 `InputAction` 类型的成员变量。
 
-	//开始时间
-	print(context.startTime);
-};
+	- 这些成员变量通常声明为 `public`，以便在 Unity Editor 的 Inspector 窗口中进行拖拽赋值或直接编辑其属性。
 
-//结束操作
-move.canceled += (context) =>
-{
-	print("结束事件调用");
-};
-```
+	- **示例代码中的声明方式：**
+
+		C#
+
+		```c#
+		public class Lesson7 : MonoBehaviour
+		{
+		    [Header("Binding")]
+		    public InputAction move; // 声明一个 public 的 InputAction 变量 'move'
+		    [Header("1D Axis")]
+		    public InputAction axis; // 声明一个 public 的 InputAction 变量 'axis'
+		    [Header("2D Vector")]
+		    public InputAction vector2D; // 声明一个 public 的 InputAction 变量 'vector2D'
+		    [Header("3D Vector")]
+		    public InputAction vector3D; // 声明一个 public 的 InputAction 变量 'vector3D'
+		    [Header("Button With One")]
+		    public InputAction btnOne; // 声明一个 public 的 InputAction 变量 'btnOne'
+		
+		    // ... 其他代码 ...
+		}
+		```
+
+	- **命名空间：** 确保引用 `UnityEngine.InputSystem` 命名空间。
+
+------
+
+
+
+#### InputAction 参数相关
+
+`InputAction` 可以在 Inspector 中进行详细配置，主要参数包括：
+
+- **Binding (绑定)：** 将具体的输入设备（如键盘的 'W' 键、鼠标左键、手柄摇杆等）映射到输入动作上。一个动作可以有多个绑定。
+- **Control Type (控制类型)：** 定义动作的预期数据类型。
+	- **Button (按钮)：** 用于离散的按下/释放操作，返回值通常是 `float` (0表示未按下，1表示完全按下)。
+	- **1D Axis (一维轴)：** 用于连续的单向输入，如滚轮或触发器，返回值是 `float`。
+	- **2D Vector (二维向量)：** 用于方向性输入，如摇杆或 WASD 组合，返回值是 `Vector2`。
+	- **3D Vector (三维向量)：** 用于更复杂的三维输入，返回值是 `Vector3`。
+- **Interaction (交互)：** 定义动作被触发的方式，例如：
+	- `Press`：按下就触发。
+	- `Hold`：按住一段时间后触发。
+	- `Tap`：快速点击触发。
+	- `SlowTap`：慢速点击触发。
+	- `MultiTap`：多次点击触发。
+- **Processor (处理器)：** 对原始输入值进行处理，例如：
+	- `Normalize`：规范化输入值（如将摇杆范围规范到 -1 到 1）。
+	- `Invert`：反转输入值。
+	- `Scale`：缩放输入值。
+	- `Deadzone`：设置输入死区。
+- **Composite (复合绑定)：** 允许将多个独立的绑定组合成一个动作，例如：
+	- `1D Axis Composite`：将两个按键（如 A/D）组合成一个一维轴。
+	- `2D Vector Composite`：将四个按键（如 WASD）组合成一个二维向量。
+
+------
+
+
+
+#### InputAction 的使用
+
+##### **1. 启用输入检测**
+
+在使用 `InputAction` 之前，必须先启用它。一个未启用的 `InputAction` 不会检测任何输入。
+
+- **方法：** 调用 `InputAction` 实例的 `Enable()` 方法。
+- **示例：** `move.Enable();`
+
+
+
+##### **2. 操作监听（事件订阅）**
+
+`InputAction` 提供了一系列事件，用于在输入动作的不同阶段触发相应的回调函数。这是处理输入逻辑的核心方式。
+
+- **`started` 事件：**
+	- **触发时机：** 当输入操作**首次开始**时触发。例如，按下按钮的瞬间，或者摇杆开始从静止状态移动的瞬间。
+	- **订阅示例：** `move.started += TestFun;`
+	- **回调函数示例：** `private void TestFun(InputAction.CallbackContext context) { print("开始事件调用"); }`
+- **`performed` 事件：**
+	- **触发时机：** 当输入操作**成功完成并真正触发**时。对于按钮，通常是按下并满足某些条件（如没有被 `Hold` 交互阻止）的瞬间。对于轴或向量，可能是值达到某个阈值时。
+	- **订阅示例：** `move.performed += (context) => { ... };` （常用 Lambda 表达式）
+	- **回调函数内可获取的信息（通过 `InputAction.CallbackContext context` 参数）：**
+		- `context.phase`：当前动作的状态（`Disabled`，`Waiting`，`Started`，`Performed`，`Canceled`）。
+		- `context.action.name`：动作的名称。
+		- `context.control.name`：触发动作的具体控件（设备）名称。
+		- `context.ReadValue<T>()`：获取动作的当前值。`T` 需要与动作的 `Control Type` 匹配（例如 `float`, `Vector2`, `Vector3`）。
+		- `context.duration`：操作持续的时间。
+		- `context.startTime`：操作开始的时间。
+- **`canceled` 事件：**
+	- **触发时机：** 当输入操作**被取消或结束**时。例如，释放按钮，或者摇杆回到静止状态。
+	- **订阅示例：** `move.canceled += (context) => { ... };`
+
+
+
+**3. 禁用输入检测**
+
+当不再需要监听某个输入动作时，应该禁用它以节省资源并避免不必要的处理。
+
+- **方法：** 调用 `InputAction` 实例的 `Disable()` 方法。
+
+- **重要：** 在 `OnDisable()` 生命周期方法中取消订阅事件，以防止内存泄漏。
+
+	```c#
+	void OnEnable()
+	{
+	    move.Enable();
+	    move.started += TestFun;
+	    move.performed += YourPerformedMethod; // 假设您有这样的方法
+	    move.canceled += YourCanceledMethod;   // 假设您有这样的方法
+	    // ... 其他 InputActions 的 Enable 和订阅
+	}
+	
+	void OnDisable()
+	{
+	    move.started -= TestFun;
+	    move.performed -= YourPerformedMethod;
+	    move.canceled -= YourCanceledMethod;
+	    move.Disable(); // 禁用动作
+	    // ... 其他 InputActions 的 Disable 和取消订阅
+	}
+	```
+
+
+
+##### **4. 实时读取值 (ReadValue)**
+
+对于轴或向量类型的输入，你也可以在 `Update` 或 `FixedUpdate` 等方法中持续读取它们的当前值，而不仅仅依赖事件。
+
+- **方法：** `action.ReadValue<T>()`
+- **示例：** `print(axis.ReadValue<float>());`
+- **场景：** 适用于需要连续获取输入状态（如角色移动速度、摄像机旋转量）的情况。
+
+------
+
+
+
+**特殊输入设置**
+
+这部分通常在 Unity 项目设置中进行：
+
+1. **Input System 基础设置：**
+	- 通过 `Edit` -> `Project Settings` -> `Input System Package` 访问。
+	- 可以调整一些全局的默认值，例如默认的触发阈值、处理触摸输入的行为等。
+2. **设置特殊输入规则（Input Actions Asset）：**
+	- 通常，我们会创建一个 `Input Actions Asset`（通过右键菜单 `Create` -> `Input Actions`）。
+	- 在这个资产文件中，你可以可视化地创建和管理所有的 `Action Maps`、`Actions` 和 `Bindings`。
+	- 将 `InputAction` 变量（例如 `public InputAction move;`）连接到这个资产文件中的具体动作上，可以实现更强大的管理和运行时切换。
 
 
 
 **start和perform的区别**
 
 - 用长按举例 当你鼠标点击的时候start已经开始调用了, 但是假如你长按设置了0.5s 那么perform会在你长按0.5s之后才开始执行 所以start并不是真正开始执行的时刻 可以理解为检测到输入的时刻
+
+
+
+
+
+
+
+### 输入动作配置文件
+
+[参数](https://www.mubu.com/doc/5ChERK9xdHM)
+
+#### **一：什么是输入配置文件？**
+
+
+
+- 输入系统中提供了一种**输入配置文件（Input Actions Asset）**。
+- 你可以将其理解为 **`InputAction` 的集合**，它允许在一个文件中编辑多个 `InputAction` 的信息。
+- 配置文件中记录了想要处理的行为和动作（即 `InputAction` 的相关信息）。
+- 我们可以在其中自己定义 `InputAction`（例如：开火、移动、旋转等），并为这些 `InputAction` 关联对应的输入绑定。
+- 之后，将该配置文件与 **`PlayerInput` 组件**进行关联。
+- `PlayerInput` 会自动帮助我们解析该文件。
+- 当触发这些 `InputAction` 输入动作时，系统会以**分发事件**的形式通知我们执行相应的行为。
+
+
+
+#### **二：编辑输入配置文件**
+
+
+
+1. 在 Project 窗口中，右键点击 `Create` -> `Input Actions`，创建一个新的 `InputActions` 配置文件。
+2. 双击创建出的文件，会打开 Input Actions 编辑器窗口。
+3. 在该窗口中进行具体的输入动作配置（包括 Action Maps, Actions, Bindings, Interactions, Processors 等）。
+
+
+
+
+
+
+
+### 输入配置文件生成C#代码
+
+![image-20250723154438848](typora-image/image-20250723154438848.png)
+
+
+
+#### **一：根据配置文件生成 C# 代码**
+
+- **目的：** 将可视化配置的 `.inputactions` 文件转换为可直接在 C# 脚本中使用的类。
+- **步骤：**
+	1. 在 Unity Project 窗口中，**选择你的 `.inputactions` 配置文件**（例如 `MyControls.inputactions`）。
+	2. 在 Inspector 窗口中，勾选 **"Generate C# Class"** 选项。
+	3. 设置生成的 C# 类的相关参数：
+		- **"Generate C# Class" 后面的下拉框：** 通常选择 "Actions" (这是最常用的，会为你的所有 Action Maps 和 Actions 生成结构化的代码)。
+		- **"Path" (生成路径)：** 指定生成 `.cs` 文件的存放位置（建议放在项目中的一个脚本文件夹内）。
+		- **"Class Name" (类名)：** 定义生成的 C# 类的名称（例如 `PlayerInputActions`）。
+		- **"Namespace" (命名空间)：** 定义生成的 C# 类所属的命名空间（可选，但推荐使用，以避免命名冲突）。
+	4. 点击 **"Apply"** 按钮，Unity 就会根据你的配置文件自动生成对应的 `.cs` 文件。
+
+
+
+#### **二：使用生成的 C# 代码进行监听**
+
+一旦生成了 C# 代码，你就可以在自己的脚本中以面向对象的方式来管理和监听输入。
+
+- **示例代码：**
+
+	C#
+
+	```c#
+	// 假设你生成的C#类名为 Lesson9Input
+	public class MyPlayerController : MonoBehaviour
+	{
+	    private Lesson9Input input; // 声明一个变量来持有生成的Input类实例
+	
+	    void Start()
+	    {
+	        // 1. 创建生成的代码对象实例
+	        input = new Lesson9Input();
+	
+	        // 2. 激活输入
+	        // 必须启用它才能接收输入事件。可以启用整个Action Map 或 所有Action。
+	        input.Enable(); // 激活所有 Action Maps
+	
+	        // 3. 事件监听
+	        // 通过生成的类实例，可以访问到其中定义的Action Maps和具体的Action
+	        // 然后订阅其 performed 事件（或其他事件如 started, canceled）
+	        input.Action1.Fire.performed += (context) =>
+	        {
+	            print("开火"); // 当 Fire 动作被触发时执行
+	        };
+	
+	        input.Action2.Space.performed += (context) =>
+	        {
+	            print("跳跃"); // 当 Space 动作被触发时执行
+	        };
+	
+	        // 如果需要读取值，也可以通过生成的实例访问：
+	        // input.Action1.Move.performed += ctx => {
+	        //     Vector2 moveInput = ctx.ReadValue<Vector2>();
+	        //     print("移动输入: " + moveInput);
+	        // };
+	    }
+	
+	    void OnDisable()
+	    {
+	        // 在对象禁用时，应该禁用输入实例并取消订阅，防止内存泄漏
+	        if (input != null)
+	        {
+	            input.Disable();
+	            input.Action1.Fire.performed -= (context) => { /* ... */ }; // 取消订阅
+	            input.Action2.Space.performed -= (context) => { /* ... */ }; // 取消订阅
+	            // 强烈推荐在 OnDisable 中取消所有订阅，或者使用 input.Dispose()
+	        }
+	    }
+	}
+	```
+
+**总结优点：**
+
+- **类型安全：** 所有的动作、绑定都以属性和方法的形式存在，编译器会在编译时检查错误。
+- **代码整洁：** 不需要在脚本中硬编码输入字符串或键码。
+- **易于重构：** 修改 InputActions 文件后，重新生成 C# 类，代码会自动更新。
+- **便于管理：** 特别是在大型项目中，统一管理所有输入变得非常方便。
+- **支持上下文切换：** 生成的类通常会包含 Action Maps，可以方便地启用/禁用不同的 Action Map 来处理不同的游戏状态（如玩家控制、UI 菜单等）。
+
+
+
+
+
+
+
+
+
+
+
+### PlayerInput
+
+#### **一：什么是 `PlayerInput`？**
+
+- `PlayerInput` 是 Unity Input System 提供的一个**专门用于接受玩家输入并处理自定义逻辑的组件**。
+- 它作为一个 MonoBehaviour 组件，可以添加到任何游戏对象上，通常是玩家角色对象。
+- **主要工作原理：**
+	1. **配置输入文件：** 首先，你需要创建一个 `.inputactions` 文件（InputActions Asset），并在其中定义好所有的 `Action Maps` 和 `InputActions`。
+	2. **关联配置文件：** 将这个 `.inputactions` 文件拖拽或赋值到 `PlayerInput` 组件的相应字段中，`PlayerInput` 会自动解析该配置文件。
+	3. **关联响应函数：** 当 InputActions 文件中定义的输入动作被触发时，`PlayerInput` 会通过多种方式（如事件、消息、C# 代码自动生成）通知你的脚本，从而处理对应的游戏逻辑。
+- **好处：**
+	- **简化输入逻辑书写：** 开发者无需手动编写复杂的输入检测代码（如 `Input.GetKey()`），`PlayerInput` 负责底层的输入管理。
+	- **通过配置文件配置：** 所有的输入绑定和行为都可以通过可视化的配置文件进行管理和配置，易于维护和迭代。
+	- **专注于业务逻辑：** 开发者可以更专注于输入事件触发后的游戏逻辑处理，而不是输入本身的检测。
+	- **跨平台兼容性：** `PlayerInput` 能够很好地处理不同输入设备（键盘、鼠标、手柄等）和平台之间的差异。
+
+
+
+#### **二：添加 `PlayerInput` 组件**
+
+- **步骤：**
+	1. 在 Hierarchy 窗口中，**选择你想要接收玩家输入的游戏对象**（通常是玩家角色或一个专门的输入管理对象）。
+	2. 在 Inspector 窗口中，点击 **"Add Component"** 按钮。
+	3. 搜索并选择 **`PlayerInput`** 组件，将其添加到选中的游戏对象上。
+
+
+
+#### **三：`PlayerInput` 参数相关**
+
+![image-20250723155224816](typora-image/image-20250723155224816.png)
+
+当 `PlayerInput` 组件被添加到游戏对象上后，你可以在 Inspector 窗口中配置其参数：
+
+- **`Actions` (输入动作资产)：**
+	- 这是最重要的参数。你需要将你创建的 `.inputactions` 文件（例如 `MyPlayerActions.inputactions`）拖拽到这个字段中。
+	- `PlayerInput` 会根据这个文件来解析和管理输入。
+- **`Default Scheme` (默认方案)：**
+	- 允许你指定一个默认的控制方案（如 "Keyboard&Mouse" 或 "Gamepad"）。
+	- 当游戏启动时，`PlayerInput` 会尝试激活与此方案匹配的设备。
+- **`Default Action Map` (默认动作映射表)：**
+	- 从 `Actions` 资产中选择一个默认激活的 `Action Map`。
+	- `Action Map` 是一组相关联的 `InputAction` 的集合（如 "Player" 控制玩家移动和攻击，"UI" 控制菜单导航）。
+	- 你可以在运行时通过代码切换 `Action Map` 来改变当前的输入行为（例如，从“玩家移动”切换到“UI 菜单操作”）。
+- **`Behavior` (行为)：**
+	- 这个参数定义了 `PlayerInput` 如何将输入事件通知给你的脚本。主要有以下几种：
+		- **`Send Messages` (发送消息)：** `PlayerInput` 会查找游戏对象上匹配输入动作名称的方法，并通过 Unity 的消息系统调用它们（例如，如果有一个名为 "Move" 的动作，它会尝试调用 `OnMove()` 方法）。
+		- **`Invoke Unity Events` (调用 Unity 事件)：** 推荐的方式。`PlayerInput` 会暴露 Inspector 中可配置的 Unity Events。你可以直接将 Unity Editor 中的方法拖拽到这些事件上，或者在代码中订阅它们。
+		- **`Invoke C# Events` (调用 C# 事件)：** 类似于直接使用自动生成的 C# 类。`PlayerInput` 会创建一个内部实例并暴露 C# 事件供你订阅。这提供类型安全的事件订阅，但通常直接使用生成的 C# 类更常见。
+		- **`Broadcast Messages` (广播消息)：** 类似于 `Send Messages`，但会向游戏对象及其子对象广播消息。
+	- 选择不同的行为会影响你在脚本中处理输入事件的方式。
+- **`Processors` (处理器) / `Interactions` (交互)：**
+	- `PlayerInput` 组件本身也可以配置全局的处理器和交互，这些会在 `InputActions` 文件中的设置之前或之后应用（具体行为取决于 `Behavior` 设置和内部实现）。但通常，这些更细粒度的配置会直接在 `.inputactions` 文件中完成。
+
+
+
+好的，这是对您提供的 Unity Input System 代码和注释的笔记整理，重点关注 `PlayerInput` 组件的不同事件响应行为：
+
+------
+
+#### **PlayerInput 的行为模式**
+
+
+
+##### **一：`Send Messages` 行为**
+
+
+
+- **工作原理：** `PlayerInput` 会查找其挂载的游戏对象上所有脚本中，名称符合特定约定（`On` + Action Name）的 `public` 方法，并在对应输入动作触发时调用它们。
+
+- **方法命名约定：** `public void On[ActionName](InputValue value)`
+
+	- 方法名必须是 `"On"` 前缀，后跟你在 InputActions 资产中定义的 `InputAction` 的名称。
+	- **参数：**
+		- 可以**没有参数**。
+		- 可以有一个参数，类型为 `UnityEngine.InputSystem.InputValue`。
+
+- **脚本挂载位置：** 必须将包含这些方法的自定义脚本**挂载到 `PlayerInput` 组件所依附的同一个游戏对象上**。
+
+- **示例：**
+
+	```c#
+	public void OnMove(InputValue value) { /* ... */ } // 对应名为 "Move" 的 InputAction
+	public void OnFire(InputValue value) { /* ... */ } // 对应名为 "Fire" 的 InputAction
+	```
+
+- **优点：** 简单易用，无需手动连接（在 Inspector 中或代码中订阅）。
+
+- **缺点：** 依赖字符串匹配，编译时不检查错误，重构时易出错；无法直接获取 `InputAction.CallbackContext` 的所有信息。即无法判断按钮的start和cancel
+
+
+
+###### **设备相关消息（在 `Send Messages` 行为下也生效）：**
+
+
+
+`PlayerInput` 还会发送以下与设备状态变化相关的消息，你可以在脚本中声明对应的方法来接收：
+
+- `public void OnDeviceRegained(PlayerInput input)`: 当控制器从设备丢失中恢复并再次运行时会触发。
+- `public void OnDeviceLost(PlayerInput input)`: 当玩家失去了分配给它的设备之一（例如，无线设备电池耗尽时）会触发。
+- `public void OnControlsChanged(PlayerInput input)`: 当控制方案切换时（例如，从键盘切换到手柄）会触发。
+
+------
+
+
+
+##### **二：`Broadcast Messages` 行为**
+
+
+
+- **工作原理：** 与 `Send Messages` 行为基本一致，遵循相同的 `On[ActionName]` 方法命名约定和参数规则。
+- **唯一区别：** `Broadcast Messages` 不仅会向 `PlayerInput` 依附的对象发送消息，还会向**该游戏对象的所有子对象**发送消息。
+- **脚本挂载位置：** 自定义脚本可以挂载在 `PlayerInput` 依附的对象上，**也可以挂载在其子对象下**。
+- **优点：** 允许将输入处理逻辑分散到子对象中。
+- **缺点：** 依然依赖字符串匹配，可能导致不必要的性能开销（因为会遍历子对象）。
+
+------
+
+
+
+##### **三：`Invoke Unity Events` 行为**
+
+
+
+- **工作原理：** 这种模式允许开发者在 Unity Editor 的 Inspector 窗口上，通过拖拽的形式将任何游戏对象上的脚本方法关联到 `PlayerInput` 暴露的 Unity Events 上。
+
+- **配置方式：**
+
+	1. 在 Inspector 中选择 `PlayerInput` 组件。
+	2. 展开 "Events" 部分（例如 "Player" Action Map下的 "Move" Action）。
+	3. 点击 "+" 按钮添加一个新的事件监听器。
+	4. 将目标游戏对象拖拽到引用槽中，然后从下拉菜单中选择脚本和对应的方法。
+
+- **响应函数参数类型：** 关联的响应函数的参数类型需要是 `InputAction.CallbackContext`。
+
+	```c#
+	public void MyFire(InputAction.CallbackContext context) { /* ... */ }
+	public void MyMove(InputAction.CallbackContext context) { /* ... */ }
+	```
+
+- **优点：**
+
+	- 可视化配置，无需编写代码进行事件订阅。
+	- 非脚本人员（如设计师）也能方便地设置输入响应。
+	- 支持 `InputAction.CallbackContext` 参数，可以获取更详细的输入信息。
+
+- **缺点：** 对于大量动作，Inspector 配置会变得繁琐；不方便在运行时动态添加或移除大量监听器。
+
+------
+
+
+
+##### **四：`Invoke C# Events` 行为**
+
+
+
+- **工作原理：** 这是最推荐且最灵活的 `PlayerInput` 行为模式，它通过直接订阅 `PlayerInput` 组件公开的 C# 事件来处理输入。
+
+- **步骤：**
+
+	1. **获取 `PlayerInput` 组件实例：**
+
+		```c#
+		PlayerInput input = this.GetComponent<PlayerInput>();
+		```
+
+	2. **订阅对应事件：** `PlayerInput` 实例会暴露出各种 C# 事件，你可以直接使用 `+=` 操作符添加委托函数。
+
+		- `input.onActionTriggered`: 最常用的事件，当任何 `InputAction` 被触发时都会调用。你需要在此回调中根据 `context.action.name` 进行 `switch` 判断来区分不同的动作。
+		- `input.onDeviceLost`: 设备丢失事件。
+		- `input.onDeviceRegained`: 设备恢复事件。
+		- `input.onControlsChanged`: 控制方案切换事件。
+
+	3. **当触发输入时，会自动调用对应函数。**
+
+- **示例：**
+
+	```c#
+	void Start()
+	{
+	    PlayerInput input = this.GetComponent<PlayerInput>();
+	    input.onDeviceLost += OnDeviceLost; // 订阅设备丢失事件
+	    input.onDeviceRegained += OnDeviceRegained; // 订阅设备恢复事件
+	    input.onControlsChanged += OnControlsChanged; // 订阅控制器切换事件
+	    input.onActionTriggered += OnActionTrigger; // 订阅所有Action触发事件
+	    
+	    //input.currentActionMap["Move"].ReadValue<Vector2>()
+	    //3.当触发输入时会自动触发事件调用对应函数
+	}
+	
+	// 处理所有Action触发的通用回调
+	public void OnActionTrigger(InputAction.CallbackContext context)
+	{
+	    switch (context.action.name)
+	    {
+	        case "Fire":
+	            if (context.phase == InputActionPhase.Performed) // 仅在触发阶段处理
+	                print("开火");
+	            break;
+	        case "Look":	
+	            print("看向");
+	            print(context.ReadValue<Vector2>());
+	            break;
+	        case "Move":
+	            print("移动");
+	            print(context.ReadValue<Vector2>());
+	            break;
+	    }
+	}
+	// 其他设备相关回调（与Send Messages中的方法签名相同）
+	public void OnDeviceLost(PlayerInput input) { print("设备丢失"); }
+	public void OnDeviceRegained(PlayerInput input) { print("设备注册"); }
+	public void OnControlsChanged(PlayerInput input) { print("控制器切换"); }
+	```
+
+- **优点：**
+
+	- **类型安全：** 在编译时检查，减少运行时错误。
+	- **灵活性高：** 可以在代码中动态地添加或移除监听器。
+	- **强大：** 通过 `onActionTriggered` 可以集中处理所有动作，方便管理。
+	- 能够获取 `InputAction.CallbackContext` 的所有详细信息。
+
+- **缺点：** 需要手动编写订阅/取消订阅代码。
+
+------
+
+
+
+##### **五：关键参数 `InputValue` 和 `InputAction.CallbackContext`**
+
+
+
+这两种类型是你在处理 `PlayerInput` 事件时，用于获取输入信息的关键参数：
+
+- **`InputValue` (用于 `Send Messages` 和 `Broadcast Messages` 行为)**
+	- **作用：** 是 `Input System` 在 `Send Messages` 和 `Broadcast Messages` 模式下，用来封装和传递输入值的轻量级结构。
+	- **常用方法/属性：**
+		- `value.isPressed`: 布尔值，表示动作是否被“按下”（通常用于按钮类型）。
+		- `value.Get<T>()`: 获取动作的具体返回值。`T` 需要与动作的 `Control Type` 匹配（例如 `value.Get<Vector2>()` 用于二维向量，`value.Get<float>()` 用于一维轴或按钮）。
+- **`InputAction.CallbackContext` (用于 `Invoke Unity Events` 和 `Invoke C# Events` 行为)**
+	- **作用：** 是 `Input System` 在更高级的事件模式（Unity Events 和 C# Events）下，用来传递更详细的输入上下文信息的结构。它比 `InputValue` 提供了更多的信息。
+	- **常用方法/属性：**
+		- `context.phase`: 当前动作的阶段（`Started`, `Performed`, `Canceled` 等）。这是非常重要的，因为它允许你在同一个回调中区分按下的开始、触发和结束。
+		- `context.action`: 对触发此回调的 `InputAction` 实例的引用，可以进一步获取动作名称 (`context.action.name`) 等信息。
+		- `context.control`: 对触发此回调的具体 `InputControl`（设备控件）的引用。
+		- `context.ReadValue<T>()`: 获取动作的当前值。与 `InputValue.Get<T>()` 类似，但通常在 `CallbackContext` 中更常用。
+		- `context.duration`: 动作持续的时间。
+		- `context.startTime`: 动作开始的时间戳。
+	- **优点：** 提供了最全面的输入信息，是处理复杂输入逻辑的首选。
+
+------
+
+
+
+
+
+
+
+
+
+### PlayerInputManager
+
+[参数](https://www.mubu.com/doc/62sgYqL_q_M)
+
+#### **一：`PlayerInputManager` 的作用**
+
+- **定义：** `PlayerInputManager` 是 Unity Input System 提供的一个**核心组件，专门用于管理本地多人游戏中的输入**。
+- **主要功能：**
+	- **玩家加入/离开管理：** 自动检测并处理新的玩家（例如，连接一个新的手柄、键盘鼠标被识别为新玩家）。
+	- **设备分配：** 将输入设备（如键盘、手柄）自动或手动分配给不同的玩家。
+	- **玩家实例化：** 自动为加入的玩家实例化预制体（Prefab）。
+	- **输入模式管理：** 处理不同的多人输入模式（如“Join in progress”）。
+- **应用场景：** 本地分屏游戏、共享键盘/手柄游戏等。
+
+
+
+#### **二：`PlayerInputManager` 组件添加及参数相关**
+
+`PlayerInputManager` 是一个 MonoBehaviour 组件，通常添加到场景中的一个空 GameObject 上。
+
+- **添加方式：** 在 Hierarchy 窗口中选择一个 GameObject (或创建一个空 GameObject)，然后在 Inspector 窗口中点击 "Add Component"，搜索并选择 `PlayerInputManager`。
+- **重要参数：**
+	1. **`Player Prefab` (玩家预制体)：**
+		- **作用：** 这是最重要的参数。你需要将一个包含了 `PlayerInput` 组件的玩家角色预制体拖拽到此字段。
+		- **效果：** 当有新玩家加入时，`PlayerInputManager` 会自动实例化这个预制体，并将其 `PlayerInput` 组件与新加入的设备关联。
+	2. **`Joining Enabled` (允许加入)：**
+		- **作用：** 一个布尔值，控制是否允许新玩家加入。如果为 `false`，即使有新设备连接，也不会有新玩家被创建。
+		- **用途：** 用于控制游戏的“加入”阶段。
+	3. **`Join Behavior` (加入行为)：**
+		- **`Join In Progress` (进行中加入)：** 默认模式。玩家可以在任何时候加入游戏，系统会尝试自动分配设备。
+		- `Require Start Button`：玩家需要按下特定的“开始”按钮才能加入。
+		- `Join On Action`：需要触发某个特定的 `InputAction` 才能加入。
+	4. **`Notification Behavior` (通知行为)：**
+		- 定义 `PlayerInputManager` 如何通知脚本玩家的加入和离开。
+		- `Send Messages`：默认，会向 `PlayerInputManager` 所在的 GameObject 及其所有子对象发送 `OnPlayerJoined` 和 `OnPlayerLeft` 消息。
+		- `Invoke Unity Events`：通过 Inspector 可视化配置 Unity Events。
+		- `Invoke C# Events`：通过代码订阅 C# 事件（推荐）。
+	5. **`Actions` (输入动作资产)：**
+		- 可选参数。如果你希望 `PlayerInputManager` 控制所有玩家的输入（而不是让每个 `PlayerInput` 单独管理），可以关联一个 `.inputactions` 文件。但通常 `PlayerInput` Prefab 会自带这个设置。
+	6. **`Player Join Method` (玩家加入方法)：**
+		- **`Input Device` (输入设备)：** 默认。当新的输入设备（如手柄）连接时，就会创建一个新玩家。
+		- `Keyboard and Mouse`：允许键盘鼠标作为一个玩家加入。
+		- `Gamepad`：只允许手柄作为玩家加入。
+		- `Specific Device`：只允许指定的某个设备加入。
+	7. **`Max Players` (最大玩家数)：**
+		- 限制可以加入游戏的玩家数量。
+	8. **`Enable For All Players` (为所有玩家启用)：**
+		- 如果勾选，所有连接的设备都会被分配给玩家，直到达到 `Max Players`。
+
+
+
+#### **三：`PlayerInputManager` 的使用**
+
+`PlayerInputManager` 主要通过其单例实例 (`PlayerInputManager.instance`) 和事件来与你的代码进行交互。
+
+- **获取 `PlayerInputManager` 实例：**
+
+	- `PlayerInputManager.instance`：这是获取场景中唯一的 `PlayerInputManager` 实例的静态属性。
+
+- 监听玩家加入/离开事件：
+
+	PlayerInputManager 提供了 C# 事件，用于在玩家加入或离开时通知你的脚本。
+
+	1. **玩家加入时事件：`onPlayerJoined`**
+
+		- **触发时机：** 当一个新的玩家成功被 `PlayerInputManager` 创建和初始化后触发。
+
+		- **参数：** 回调函数会接收一个 `PlayerInput` 类型的参数，这是新创建的玩家预制体上的 `PlayerInput` 组件的引用。
+
+		- **用途：** 在这里可以对新玩家进行初始化设置，例如调整摄像机、设置玩家位置、分配 ID 等。
+
+		- **示例代码：**
+
+			```c#
+			void Start()
+			{
+			    // 确保 PlayerInputManager 已添加到场景并配置好
+			    if (PlayerInputManager.instance != null)
+			    {
+			        PlayerInputManager.instance.onPlayerJoined += OnPlayerJoinedCallback;
+			        PlayerInputManager.instance.onPlayerLeft += OnPlayerLeftCallback;
+			    }
+			}
+			
+			// 当有玩家加入时调用的回调函数
+			private void OnPlayerJoinedCallback(PlayerInput playerInput)
+			{
+			    print($"创建了一个玩家: ID={playerInput.playerIndex}, 设备: {playerInput.devices[0].displayName}");
+			
+			    // 获取玩家对象并进行额外设置
+			    // 例如：设置玩家的初始位置
+			    // playerInput.gameObject.transform.position = GetSpawnPositionForPlayer(playerInput.playerIndex);
+			
+			    // 获取玩家对象上的其他脚本，例如移动脚本
+			    // MyPlayerMovement movement = playerInput.gameObject.GetComponent<MyPlayerMovement>();
+			    // if (movement != null)
+			    // {
+			    //     movement.Initialize(playerInput.playerIndex); // 传递玩家ID或其他参数
+			    // }
+			}
+			```
+
+	2. **玩家离开时事件：`onPlayerLeft`**
+
+		- **触发时机：** 当一个玩家从游戏中离开时触发（例如，其设备断开连接，或你手动移除）。
+
+		- **参数：** 回调函数会接收一个 `PlayerInput` 类型的参数，表示离开的玩家的 `PlayerInput` 组件。
+
+		- **用途：** 在这里可以处理玩家离开后的清理逻辑，例如销毁玩家角色、更新 UI 显示等。
+
+		- **示例代码：**
+
+			```c#
+			private void OnPlayerLeftCallback(PlayerInput playerInput)
+			{
+			    print($"离开了玩家: ID={playerInput.playerIndex}, 设备: {playerInput.devices[0].displayName}");
+			    // 销毁玩家游戏对象
+			    // Destroy(playerInput.gameObject);
+			}
+			```
+
+- 在 OnDisable 中取消订阅：
+
+	与所有事件订阅一样，为了防止内存泄漏，务必在脚本被禁用或销毁时取消订阅 PlayerInputManager 的事件。
+
+	```c#
+	void OnDisable()
+	{
+	    if (PlayerInputManager.instance != null)
+	    {
+	        PlayerInputManager.instance.onPlayerJoined -= OnPlayerJoinedCallback;
+	        PlayerInputManager.instance.onPlayerLeft -= OnPlayerLeftCallback;
+	    }
+	}
+	```
+
+
+
+#### **四：示例代码中 `Move` 方法的上下文**
+
+
+
+`Move(InputAction.CallbackContext context)` 方法是用于处理玩家移动输入的。
+
+- **`dir` 变量：**
+	- `private Vector3 dir;`：这是一个私有的 `Vector3` 类型的成员变量，用于存储玩家当前的移动方向。
+- **`Move` 方法的调用：**
+	- 这个 `Move` 方法很可能被配置为 `PlayerInput` 组件的 `Send Messages` 行为（当 `PlayerInput` 依附的对象上挂载了这个脚本时），或者被 `PlayerInputManager` 实例化的 `PlayerInput` Prefab 中的 `PlayerInput` 组件关联到了 `Invoke Unity Events` 或 `Invoke C# Events`。
+	- `dir = context.ReadValue<Vector2>();`：从 `InputAction.CallbackContext` 中读取 `Move` 动作的二维向量值（通常是 WASD 或摇杆的 X/Y 输入）。
+	- `dir.z = dir.y; dir.y = 0;`：这行代码将 `Vector2` 的 Y 分量赋值给 `Vector3` 的 Z 分量，并将 `Vector3` 的 Y 分量设为 0。
+		- **用途：** 这是一个常见的转换，用于将二维平面（XY）的输入转换为三维空间（XZ 平面）的移动方向，通常用于自上而下或俯视角游戏中的角色移动，避免角色向上或向下飞。
+- **`Update` 方法中的移动：**
+	- `this.transform.Translate(dir * 10 * Time.deltaTime);`：在 `Update` 方法中，根据 `dir` 存储的移动方向，以每秒 `10` 个单位的速度移动当前游戏对象。`Time.deltaTime` 用于确保移动速度不受帧率影响。
+
+------
+
+
+
+
+
+
+
+### UGUI配合使用(有点鸡肋 直接跳过了)
+
+[思维导图](https://www.mubu.com/doc/7mSZv523-3M)
+
+#### **一：Input System 对 UI 的支持**
+
+1. **不支持 IMGUI (Immediate Mode GUI / 旧版 GUI)：**
+	- 新的 Input System 默认**不兼容** Unity 的旧版 `OnGUI()` 系统 (IMGUI)。
+	- 如果你的项目激活了 Input System 包，并且设置为只使用 Input System，那么 `OnGUI()` 中的输入判断（如 `Event.current.type == EventType.KeyDown`）将不会被触发。
+	- **解决方法：**
+		- 要让 `OnGUI()` 中的输入检测生效，你需要将项目设置为同时支持**“Both”** (新旧输入系统都支持) 或**仅激活旧版 Input Manager**。
+		- **注意：** 这不影响 Unity 编辑器本身的 GUI 脚本（例如自定义 Inspector 或 Editor Window）。
+2. **支持 UGUI (Unity UI)，但需要专用模块：**
+	- 新的 Input System **完全支持** Unity 的 UGUI (Unity UI) 系统。
+	- 然而，为了让 UGUI 能够接收并正确处理来自 Input System 的输入事件，你需要使用新的输入模块：**`Input System UI Input Module`**。
+	- **配置方法：** 在场景中的 `EventSystem` GameObject 上，将原有的 `Standalone Input Module` 替换为 `Input System UI Input Module`。
+
+
+
+#### **二：UGUI 中的新输入系统输入模块参数相关**
+
+见思维导图
+
+#### **三：VR 相关中使用新输入系统注意事项**
+
+- **特殊组件：`Tracked Device Raycaster`**
+	- 如果你正在开发 VR 项目，并希望在 VR 环境中使用 Input System 配合 UGUI 进行交互（例如，通过 VR 控制器射线点击 UI 元素），你需要在你的 **Canvas 对象上添加 `Tracked Device Raycaster` 组件**。
+	- `Tracked Device Raycaster` 允许 VR 控制器发出的射线与 UGUI 元素进行交互，而不是传统的鼠标或触摸输入。
+
+
+
+**四：多人游戏使用多套 UI**
+
+- **核心组件：`Multiplayer Event System`**
+	- 对于同一设备上的本地多人游戏（例如分屏游戏），如果每个玩家需要操作自己独立的一套 UI 界面（例如每个玩家都有自己的背包界面），你需要将场景中的 `EventSystem` 组件**替换为 `Multiplayer Event System` 组件**。
+- **特点：**
+	- **支持多实例：** 与 `EventSystem` 组件不同，你可以在场景中**同时激活多个 `MultiplayerEventSystem`**。
+	- **独立 UI 控制：** 这样，每个玩家都可以有自己的 `InputSystemUIInputModule` 和 `MultiplayerEventSystem` 组件。
+	- **独立操作集：** 每个玩家可以拥有自己独立的一组 `InputAction` 来驱动自己的 UI 实例。
+	- **与 `PlayerInput` 集成：** 如果你正在使用 `PlayerInput` 组件来管理玩家输入，你可以设置 `PlayerInput` 以**自动配置玩家的 `InputSystemUIInputModule` 以使用该玩家特定的操作**。这简化了多人 UI 的设置。
+	- **`playerRoot` 属性：** `MultiplayerEventSystem` 组件添加了一个 `playerRoot` 属性。你可以将此属性设置为一个游戏对象，该游戏对象包含此事件系统**应在其层次结构中处理的所有 UI 可选择项**。这意味着一个 `MultiplayerEventSystem` 只会处理其 `playerRoot` 下的 UI。
+
+
+
+#### **五：On-Screen 组件相关 (屏幕模拟输入)**
+
+- **作用：** `On-Screen` 组件提供了一种方式来在屏幕上模拟 UI 控件，并将其输入直接传递给 Input System。这在移动端游戏或需要可视化调试输入时非常有用。
+- **主要组件类型：**
+	1. **`On-Screen Button`：**
+		- **作用：** 模拟一个按钮交互。当用户点击屏幕上的这个 UI 按钮时，它会触发关联的 `InputAction`。
+		- **用途：** 虚拟跳跃按钮、开火按钮等。
+	2. **`On-Screen Stick`：**
+		- **作用：** 模拟一个摇杆交互。用户可以通过触摸或拖拽屏幕上的虚拟摇杆来生成方向输入。
+		- **用途：** 虚拟移动摇杆、虚拟视角摇杆等。
+- **配置：** 它们通常需要你指定一个 `Control Path`，以将屏幕上的模拟输入映射到 InputActions 文件中定义的某个特定控制路径（例如 `/Gamepad/leftStick` 或 `/Keyboard/wasd`）。
+
+
+
+#### **六：更多内容**
+
+- **官方文档：** 建议查阅 Unity 官方文档，以获取更多关于 Input System 和 UI 配合使用的详细内容和最新信息：
+	- **https://docs.unity3d.com/Packages/com.unity.inputsystem@1.2/manual/UISupport.html**	
+
+
+
+
+
+### InputDebug
+
+[思维导图](https://www.mubu.com/doc/7mSZv523-3M)
+
+#### **一：什么是 `Input Debugger`？**
+
+- **定义：** `Input Debugger` 顾名思义就是**输入调试器**。
+- **作用：** 它是 Unity Input System 提供的一个强大工具窗口，允许我们实时地**检测和查看所有与输入相关的信息**。
+- **主要用途：** 当我们的输入不按预期工作时（例如按键没反应、摇杆值不对、设备不被识别等），可以通过 `Input Debugger` 来**排查问题**，帮助我们理解输入数据的流向和状态。
+
+
+
+**二：如何打开 `Input Debugger` 窗口？**
+
+有几种方法可以打开 `Input Debugger` 窗口：
+
+1. **通过菜单栏：**
+	- 选择 Unity 编辑器顶部的菜单：`Window` -> `Analysis` -> `Input Debugger` (窗口 -> 分析 -> 输入调试器)。
+2. **通过 `PlayerInput` 组件：**
+	- 在 Inspector 窗口中选中任意一个包含 `PlayerInput` 组件的游戏对象。
+	- 在 `PlayerInput` 组件的底部，有一个方便的 **"Open Input Debugger"** 按钮，点击即可打开。
+
+
+
+#### **三：`Input Debugger` 窗口上的信息**
+
+见思维导图
+
+
+
+
+
+
+
+
+
+### 综合练习 (实现游戏内改键功能)
+
+
+
+#### 获取任意输入的信息
+
+##### 一：回顾学过的获取任意键输入的方法
+
+1. **通过 `InputAction` 监听任意键盘按键按下：**
+
+	- 这种方法通常用于你已经定义了一个 `InputAction`，并且你想要它在任何键盘按键被按下时触发。
+
+	- **步骤：**
+
+		1. 创建一个 `InputAction` 实例（例如 `input = new MyInputActions();`）。
+		2. 启用该 `InputAction`（`input.Enable();`）。
+		3. 订阅 `InputAction` 的 `performed` 事件。
+		4. 在回调函数中，通过 `context.control.name` 和 `context.control.path` 获取被按下的具体按键信息。
+
+	- **示例代码：**
+
+		```c#
+		// 假设 input 是一个 InputAction 实例，并且已经配置了任意键绑定（例如 <Keyboard>/anyKey）
+		input.Enable();
+		input.performed += (context) =>
+		{
+		    print("任意键盘键被按下");
+		    print("按键名称: " + context.control.name); // 例如 "space", "a", "leftArrow"
+		    print("按键路径: " + context.control.path); // 例如 "<Keyboard>/space"
+		};
+		```
+
+	- **特点：** 这种方式提供了更详细的 `InputAction.CallbackContext` 信息，可以判断按键的阶段。
+
+2. **通过 `Keyboard.current.onTextInput` 监听输入的字符：**
+
+	- 这种方法专门用于监听用户在键盘上输入的**字符**，通常用于文本输入框（IME）等场景。
+
+	- **步骤：**
+
+		1. 直接通过 `Keyboard.current` 静态属性访问当前键盘设备。
+		2. 订阅 `onTextInput` 事件。
+		3. 回调函数会接收一个 `char` 类型的参数，即被输入的字符。
+
+	- **示例代码：**
+
+		```c#
+		// 必须确保 Keyboard.current 存在且已启用
+		if (Keyboard.current != null)
+		{
+		    Keyboard.current.onTextInput += (c) =>	
+		    {
+		        print("输入字符: " + c); // 例如 "a", "B", "1", "!"
+		    };
+		}
+		```
+
+	- **特点：** 只能获取输入的字符，无法获取非字符按键（如 Shift, Ctrl, F1 等）的信息。
+
+
+
+##### 二：Input System 中专门用于任意键按下的方案
+
+Unity Input System 提供了一个更直接、更通用的方式来监听**任何设备上的任何按钮/按键的按下事件**。
+
+1. **`InputSystem.onAnyButtonPress` 事件：**
+
+	- 这是一个全局事件，属于 `InputSystem` 类。它会在**任何连接的设备（键盘、鼠标、手柄等）上的任何按钮或按键被按下时**触发。
+
+	- **使用 `CallOnce()`：**
+
+		- `InputSystem.onAnyButtonPress.CallOnce((control) => { ... });`
+
+		- **作用：** 订阅事件，但**只会在事件第一次触发时执行一次回调函数，然后自动取消订阅**。
+
+		- **用途：** 适用于“按下任意键开始游戏”、“检测第一个连接的设备”等只需一次性响应的场景。
+
+		- **特点：** **不会报错。**
+
+		- **示例代码：**
+
+			```c#
+			// 监听任何按钮/按键的第一次按下
+			InputSystem.onAnyButtonPress.CallOnce((control) =>
+			{
+			    print("检测到第一次任意按钮按下！");
+			    print("被按下的控件路径: " + control.path); // 例如 "<Keyboard>/space", "<Gamepad>/buttonSouth"
+			    print("被按下的控件名称: " + control.name); // 例如 "space", "buttonSouth", "leftButton"
+			    // 此时，playerInput.Enable() 也可以在这里调用
+			});
+			```
+
+	- **直接订阅 `InputSystem.onAnyButtonPress`：**
+
+		- `InputSystem.onAnyButtonPress += (control) => { ... };`
+
+		- **作用：** 订阅事件，**每次**有任何按钮/按键被按下时都会执行回调函数。
+
+		- **特点：** 如果你没有正确处理事件的生命周期（例如在 `OnDisable` 中取消订阅），可能会在 Unity 编辑器中看到警告或错误（例如“Call”相关的提示，如果重复订阅了同一个 `Action` 或 `Control`），但功能上仍能正常执行。
+
+		- **用途：** 持续监听所有设备的输入，例如用于调试或特殊的全局输入处理。
+
+		- **示例代码：**
+
+			```c#
+			void OnEnable()
+			{
+			    // 每次有任何按钮/按键被按下时都会触发
+			    InputSystem.onAnyButtonPress += OnAnyButtonPressCallback;
+			}
+			
+			void OnDisable()
+			{
+			    // 重要：在禁用时取消订阅，防止内存泄漏或重复调用
+			    InputSystem.onAnyButtonPress -= OnAnyButtonPressCallback;
+			}
+			
+			private void OnAnyButtonPressCallback(InputControl control)
+			{
+			    print("任意按钮/按键被按下 (持续监听): " + control.path);
+			}
+			```
+
+**总结：**
+
+- **`InputSystem.onAnyButtonPress`** 是监听**任何设备上的任何按钮/按键**最直接和通用的方法。
+- 使用 **`.CallOnce()`** 适用于只需要一次性响应的场景，它会自动取消订阅，避免潜在的错误或性能问题。
+- 直接订阅 `InputSystem.onAnyButtonPress` 需要手动管理订阅和取消订阅。
+- `Keyboard.current.onTextInput` 专门用于获取键盘输入的**字符**。
+- 通过 `InputAction` 监听 `performed` 事件并绑定 `<Keyboard>/anyKey` 也能实现监听键盘任意键按下，但需要预先配置 `InputAction`。
+
+
+
+
+
+
+
+#### 通过Json数据加载配置文件
+
+
+
+##### 一：分析 `PlayerInput` 文件中的输入配置文件
+
+- **`.inputactions` 文件结构：** Unity 的 `.inputactions` 文件本质上是一个 JSON 格式的文本文件。它定义了：
+	- **Action Maps (动作映射表)：** 组织不同游戏状态下的输入动作（例如 "Player" 玩家控制, "UI" 用户界面）。
+	- **Actions (动作)：** 具体的输入操作（例如 "Move" 移动, "Jump" 跳跃, "Fire" 开火）。
+	- **Bindings (绑定)：** 将具体的输入设备控件（例如键盘的 W 键，手柄的左摇杆）映射到这些动作。
+	- **Interactions (交互)：** 定义动作如何被触发（例如 "Tap" 轻击, "Hold" 长按）。
+	- **Processors (处理器)：** 对输入值进行后处理（例如 "Normalize" 归一化, "Invert" 反转）。
+- **用途：** 这种 JSON 结构使得输入配置具有高度的灵活性和可移植性，可以方便地在代码中进行解析和操作。
+
+
+
+##### 二：通过 JSON 手动加载输入配置文件
+
+在某些高级场景中，你可能需要动态地加载和替换 `PlayerInput` 使用的输入配置文件，例如：从网络下载配置、根据用户选择加载不同语言的绑定、或者在运行时生成配置。
+
+- **步骤：**
+
+	1. **准备 JSON 数据：**
+		- 将 `.inputactions` 文件视为一个文本资产。为了能在运行时通过 `Resources.Load` 加载，你需要将其放置在项目中的 `Resources` 文件夹内。
+		- 通过 `Resources.Load<TextAsset>("YourInputActionsFileName").text;` 读取其文本内容。
+	2. **从 JSON 创建 `InputActionAsset`：**
+		- 使用 `InputActionAsset.FromJson(string json)` 静态方法，将读取到的 JSON 字符串解析成一个 `InputActionAsset` 实例。这个 `asset` 对象现在包含了你 `.inputactions` 文件中定义的所有 Action Maps、Actions 和 Bindings。
+	3. **将 `InputActionAsset` 分配给 `PlayerInput`：**
+		- 将解析得到的 `InputActionAsset` 实例赋值给 `PlayerInput` 组件的 `actions` 属性 (`input.actions = asset;`)。
+		- **注意：** 如果 `PlayerInput` 之前已经有了激活的 `Action Map`，更改 `actions` 属性后，`PlayerInput` 会自动尝试重新激活其 `Default Action Map` 或之前激活的 `Action Map`。
+	4. **订阅 `onActionTriggered` 事件 (可选但推荐)：**
+		- 为了响应加载的 `InputActionAsset` 中的动作，你可以订阅 `PlayerInput` 实例的 `onActionTriggered` 事件。这个事件在任何 `InputAction` 达到 `Performed`、`Started` 或 `Canceled` 阶段时都会触发。
+		- 在回调函数中，你可以使用 `context.phase` 判断动作的阶段，并使用 `context.action.name` 来区分不同的动作，然后执行相应的游戏逻辑。
+
+- **示例代码：**
+
+	C#
+
+	```c#
+	public PlayerInput input; // 在 Inspector 中拖拽赋值 PlayerInput 组件
+	
+	void Start()
+	{
+	    // 1. 从 Resources 文件夹加载名为 "PlayerInputTest" 的 .inputactions 文件（作为TextAsset）的文本内容。
+	    // 确保你的 .inputactions 文件放在 Resources 文件夹下。
+	    string json = Resources.Load<TextAsset>("PlayerInputTest").text; 
+	
+	    // 2. 使用 FromJson 方法将 JSON 字符串解析为 InputActionAsset 对象。
+	    InputActionAsset asset = InputActionAsset.FromJson(json);
+	
+	    // 3. 将新加载的 InputActionAsset 分配给 PlayerInput 组件。
+	    // 这会替换掉 Inspector 中可能已设置的任何 Actions 资产。
+	    input.actions = asset; 
+	
+	    // 4. 订阅 PlayerInput 的 onActionTriggered 事件，以响应所有动作的触发。
+	    input.onActionTriggered += (context) =>
+	    {
+	        // 检查动作是否处于 Performed 阶段（例如按键被松开，或摇杆达到最终值）
+	        if (context.phase == InputActionPhase.Performed)
+	        {
+	            // 根据动作的名称执行不同的逻辑
+	            switch (context.action.name)
+	            {
+	                case "Move":
+	                    print("移动动作触发！值: " + context.ReadValue<Vector2>());
+	                    break;
+	                case "Look":
+	                    print("看向动作触发！值: " + context.ReadValue<Vector2>());
+	                    break;
+	                case "Fire":
+	                    print("开火动作触发！");
+	                    break;
+	            }
+	        }
+	        // 也可以根据需要检查其他阶段：
+	        // else if (context.phase == InputActionPhase.Started)
+	        // {
+	        //     print(context.action.name + " 动作开始！");
+	        // }
+	    };
+	
+	    // 此时，PlayerInput 组件会根据 PlayerInputTest 文件中的定义开始监听输入。
+	    // 如果 PlayerInput 有 Default Action Map，它会自动尝试激活该 Map。
+	    // 否则，你可能需要手动激活一个 Action Map，例如：
+	    // input.SwitchCurrentActionMap("Player");
+	}
+	```
+
+- **优点：**
+
+	- **灵活性：** 可以在运行时动态加载不同的输入配置，实现个性化设置或多语言支持。
+	- **数据驱动：** 输入配置可以作为外部文件（如 JSON）进行管理和更新，无需重新编译游戏。
+
+- **注意事项：**
+
+	- 确保 JSON 文件格式正确，否则 `FromJson` 会报错。
+	- 如果 JSON 文件中的 Action Map 名称与代码中预期的不符，可能会导致问题。
+	- 手动管理 `InputActionAsset` 意味着你需要更细致地处理其生命周期，例如在不再需要时 `Disable()` 或 `Dispose()`。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -17498,6 +18524,7 @@ public class Lesson18 : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 ##### 事件触发器是什么
 
 - **定义**：事件触发器是Unity中的`EventTrigger`组件，它集成了多种事件接口，方便为控件添加事件监听。
+- **使用** : 首先在物体上添加EventTrigger脚本 然后按照以下方法添加事件
 
 ##### 如何使用事件触发器
 
@@ -17550,6 +18577,7 @@ public class Lesson18 : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 ##### 示例代码
 
 ```csharp
+EventTrigger et = gameobject.AddComponent<EventTrigger>();
 EventTrigger.Entry entry = new EventTrigger.Entry();
 entry.eventID = EventTriggerType.Drag;
 entry.callback.AddListener((data) => {
