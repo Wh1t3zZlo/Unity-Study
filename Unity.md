@@ -8781,198 +8781,6 @@ Addressables.LoadSceneAsync("SampleScene", UnityEngine.SceneManagement.LoadScene
 
 
 
-
-
-#### AddressableMgr(场景加载没写)
-
-```C#
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-
-public class AddressablesMgr
-{
-    private static AddressablesMgr instance = new AddressablesMgr();
-    public static AddressablesMgr Instance => instance;
-
-    //有一个容器 帮助我们存储 异步加载的返回值
-    public Dictionary<string, IEnumerator> resDic = new Dictionary<string, IEnumerator>();
-
-    private AddressablesMgr() { }
-
-    //异步加载资源的方法
-    public void LoadAssetAsync<T>(string name, Action<AsyncOperationHandle<T>> callBack)
-    {
-        //由于存在同名 不同类型资源的区分加载
-        //所以我们通过名字和类型拼接作为 key
-        string keyName = name + "_" + typeof(T).Name;
-        AsyncOperationHandle<T> handle;
-        //如果已经加载过该资源
-        if (resDic.ContainsKey(keyName))
-        {
-            //获取异步加载返回的操作内容
-            handle = (AsyncOperationHandle<T>)resDic[keyName];
-
-            //判断 这个异步加载是否结束
-            if(handle.IsDone)
-            {
-                //如果成功 就不需要异步了 直接相当于同步调用了 这个委托函数 传入对应的返回值
-                callBack(handle);
-            }
-            //还没有加载完成
-            else
-            {
-                //如果这个时候 还没有异步加载完成 那么我们只需要 告诉它 完成时做什么就行了
-                handle.Completed += (obj) => {
-                    if (obj.Status == AsyncOperationStatus.Succeeded)
-                        callBack(obj);
-                };
-            }
-            return;
-        }
-        
-        //如果没有加载过该资源
-        //直接进行异步加载 并且记录
-        handle = Addressables.LoadAssetAsync<T>(name);
-        handle.Completed += (obj)=> {
-            if (obj.Status == AsyncOperationStatus.Succeeded)
-                callBack(obj);
-            else
-            {
-                Debug.LogWarning(keyName + "资源加载失败");
-                if(resDic.ContainsKey(keyName))
-                    resDic.Remove(keyName);
-            }
-        };
-        resDic.Add(keyName, handle);
-    }
-
-    //释放资源的方法 
-    public void Release<T>(string name)
-    {
-        //由于存在同名 不同类型资源的区分加载
-        //所以我们通过名字和类型拼接作为 key
-        string keyName = name + "_" + typeof(T).Name;
-        if(resDic.ContainsKey(keyName))
-        {
-            //取出对象 移除资源 并且从字典里面移除
-            AsyncOperationHandle<T> handle = (AsyncOperationHandle<T>)resDic[keyName];
-            Addressables.Release(handle);
-            resDic.Remove(keyName);
-        }
-    }
-
-    //异步加载多个资源 或者 加载指定资源
-    public void LoadAssetAsync<T>(Addressables.MergeMode mode, Action<T> callBack, params string[] keys)
-    {
-        //1.构建一个keyName  之后用于存入到字典中
-        List<string> list = new List<string>(keys);
-        string keyName = "";
-        foreach (string key in list)
-            keyName += key + "_";
-        keyName += typeof(T).Name;
-        //2.判断是否存在已经加载过的内容 
-        //存在做什么
-        AsyncOperationHandle<IList<T>> handle;
-        if (resDic.ContainsKey(keyName))
-        {
-            handle = (AsyncOperationHandle<IList<T>>)resDic[keyName];
-            //异步加载是否结束
-            if(handle.IsDone)
-            {
-                foreach (T item in handle.Result)
-                    callBack(item);
-            }
-            else
-            {
-                handle.Completed += (obj) =>
-                {
-                    //加载成功才调用外部传入的委托函数
-                    if(obj.Status == AsyncOperationStatus.Succeeded)
-                    {
-                        foreach (T item in handle.Result)
-                            callBack(item);
-                    }
-                };
-            }
-            return;
-        }
-        //不存在做什么
-        handle = Addressables.LoadAssetsAsync<T>(list, callBack, mode);
-        handle.Completed += (obj) =>
-        {
-            if(obj.Status == AsyncOperationStatus.Failed)
-            {
-                Debug.LogError("资源加载失败" + keyName);
-                if (resDic.ContainsKey(keyName))
-                    resDic.Remove(keyName);
-            }
-        };
-        resDic.Add(keyName, handle);
-    }
-
-    public void Release<T>(params string[] keys)
-    {
-        //1.构建一个keyName  之后用于存入到字典中
-        List<string> list = new List<string>(keys);
-        string keyName = "";
-        foreach (string key in list)
-            keyName += key + "_";
-        keyName += typeof(T).Name;
-        
-        if(resDic.ContainsKey(keyName))
-        {
-            //取出字典里面的对象
-            AsyncOperationHandle<IList<T>> handle = (AsyncOperationHandle<IList<T>>)resDic[keyName];
-            Addressables.Release(handle);
-            resDic.Remove(keyName);
-        }
-    }
-
-
-    //清空资源
-    public void Clear()
-    {
-        resDic.Clear();
-        AssetBundle.UnloadAllAssetBundles(true);
-        Resources.UnloadUnusedAssets();
-        GC.Collect();
-    }
-}
-
-```
-
-
-
-```c#
-AddressablesMgr.Instance.LoadAssetAsync<GameObject>("Cube", (obj) =>
-{
-	Instantiate(obj.Result);
-});
-
-AddressablesMgr.Instance.LoadAssetAsync<GameObject>("Cube", (obj) =>
-{
-	Instantiate(obj.Result, Vector3.right * 5, Quaternion.identity);
-	//使用完资源后 移除资源
-	AddressablesMgr.Instance.Release<GameObject>("Cube");
-});
-
-AddressablesMgr.Instance.LoadAssetAsync<Object>(Addressables.MergeMode.Intersection, (obj) =>
-{
-	print("1" + obj.name);
-}, "Cube", "SD");
-
-AddressablesMgr.Instance.LoadAssetAsync<Object>(Addressables.MergeMode.Intersection, (obj) =>
-{                                               
-	print("2" + obj.name);
-}, "Cube", "SD");
-```
-
-
-
 ### 配置相关
 
 #### Addressables Profiles
@@ -9360,9 +9168,9 @@ AddressablesMgr.Instance.LoadAssetAsync<Object>(Addressables.MergeMode.Intersect
 
 
 
-#### 资源更新知识点笔记
+#### 资源更新
 
-
+(Update 和 完全Build new效果是一样的 只不过是打包的时候等的时候后者久一点而已 因为前者只打包新的内容 后者全部重新打包 但是对于用户来说 下载时间是没变的)
 
 ##### 一、 资源更新指的是什么？
 
@@ -9371,72 +9179,658 @@ AddressablesMgr.Instance.LoadAssetAsync<Object>(Addressables.MergeMode.Intersect
 
 
 
-二、 内容更新限制参数回顾 (Content Update Restriction)
+##### 二、 内容更新限制参数回顾 (Content Update Restriction)
+
+![image-20250729172459496](typora-image/image-20250729172459496.png)
+
+现在改名字了
 
 在 Addressables Groups 的组设置中，`Content Update Restriction` 参数决定了该组中资源在发布后的更新行为：
 
-- **`Can Change Post Release` (可以改变发行后内容)：**
-	- **行为：** 当该组中的任何资源发生更改时，进行更新构建时，Addressables 会**重新构建整个包**（即生成一个全新的 AssetBundle 来替换旧的）。
-	- **特点：** 不会移动任何资源到新的更新组。
-	- **适用场景：** 适用于那些即使只修改了少量内容，也希望玩家重新下载整个相关包的情况；或者当组内资源变动较大，重新打包更简单时。
-	- **缺点：** 玩家需要下载的内容可能较大，比较耗时耗流量。
-- **`Cannot Change Post Release` (无法改变发布后内容)：**
-	- **行为：** 当该组中的任何资源在发布后发生更改时，Addressables 的“检查内容更新限制”（Check for Content Update Restrictions）工具会将其**移动到为更新创建的一个新组中**。在进行后续的更新构建时，从这个新组创建的 AssetBundles 中的资产将**覆盖**现有包中的对应版本。
-	- **特点：** 主要用于**局部更新**，只为发生变化的内容生成差异包。
-	- **适用场景：** 适用于频繁的小范围更新，旨在最小化玩家下载量。
-	- **优点：** 玩家只需下载修改的部分，相对更节约时间和流量。
+- ### `Prevent Updates` 的核心作用：**阻止内容热更新**
+	
+	
+	
+	- **如果勾选了 `Prevent Updates`：**
+		- 你是在告诉 Unity Addressables 系统：**“这个组里的所有 AssetBundle，从发布出去的那一刻起，就是最终版本，不要再通过热更新的方式去改变它了。”**
+		- **在执行 `Build -> Update a Previous Build` (内容更新构建) 时：** Addressables 会**跳过这个组**。即使你修改了组内的资源，它也不会为这个组生成任何新的 AssetBundle，也不会在 `Content Catalog` 中更新该组的任何条目。
+		- **结果：** 客户端（玩家的游戏）将**永远只会加载**它初始安装包里带的那个版本，或者它第一次下载到的那个版本（如果它本来是远程但被标记为 Prevent Update）。如果这些内容需要更新，**唯一的办法就是发布一个新的游戏安装包**，让玩家从应用商店重新下载。
+	- **如果未勾选 `Prevent Updates`：**
+		- 这表示这个组的资源**允许**通过热更新方式进行更新。
+		- **在执行 `Build -> Update a Previous Build` 时：** Addressables 会比较该组内容与旧版本的差异。
+			- 如果内容有变化，它会为变化的 AssetBundle 生成**新的 AssetBundle 文件**（包含新的哈希）。
+			- `Content Catalog` 会被更新，指向这些新的 AssetBundle 文件。
+			- 客户端下载新的 Catalog 后，会下载这些**新的 AssetBundle** 来替换旧的。
 
 
 
-##### 三、 整包更新（使用 `Can Change Post Release`）
+我问了ai一堆问题
 
-- **设置：** 将组的 `Content Update Restriction` 设置为 `Can Change Post Release`。
-- **概念：** 整包更新指的是，当某一个分组的资源发生变化后，**我们需要将该分组的整个 AssetBundle 进行重新打包并替换**。
-- **适用性：** 这种方式比较适用于**大范围资源更新**时使用，例如某个大模块或某个大场景进行了整体改动。
-- **缺点：**
-	- 玩家需要下载的内容较大，更新耗时较长。
-	- 会消耗较多的玩家流量。
-- **注意：** Unity 自带的 Addressables Hosting 资源服务器模拟工具有时可能会出现问题（例如，明明开启了服务但加载不成功）。在这种情况下，建议使用第三方工具来搭建本地模拟资源服务器进行测试，以确保模拟环境的稳定性。
+##### 总结你的问题：
 
+> “我每次 update 之后是不是旧的 ab 包不用删但是要把 catalog 旧的删了换新的”
 
+- **“旧的 ab 包不用删”：** **正确！** 大部分旧的 AssetBundle 文件是需要保留的，因为它们可能仍然被最新的 Catalog 引用。
+- **“但是要把 catalog 旧的删了换新的”：**
+	- 对于**根目录的 `catalog.hash` 文件**：**正确，需要替换（覆盖）**。
+	- 对于**带 `Build ID` 的 `Content Catalog` 文件（例如 `catalog_ABCDEF.json`）**：**不建议立即删除旧的**。通常是上传新的，旧的保留一段时间，待确认无用后统一清理。
 
-<img src="typora-image/image-20250717155516992.png" alt="image-20250717155516992" style="zoom: 67%;" />
-
-
-
-<img src="typora-image/image-20250717155531937.png" alt="image-20250717155531937" style="zoom: 67%;" />
-
-- 更新的时候会让你选择一个文件 就在路径里面找到这个文件 这就是上一次AB打包的对比文件 他会根据这个文件比对什么东西更新了
+希望这次的详细分类能彻底解决你的疑问！
 
 
 
-四、 局部更新（使用 `Cannot Change Post Release`）
-
-- **设置：** 将组的 `Content Update Restriction` 设置为 `Cannot Change Post Release`。
-- **概念：** 局部更新指的是，当组中有资源发生变化时，Addressables 只会**单为发生变化的内容生成新的或差异的 AssetBundle 包**。
-- **优点：**
-	- 玩家只需下载发生变化的那一小部分内容，极大地**节约了时间和流量**。
-	- 当需要使用该资源时，Addressables 会自动加载最新的内容。
-- **适用性：** 适用于小幅改动、Bug 修复或增量内容更新。
-
-
-
-![image-20250717160207691](typora-image/image-20250717160207691.png)
-
-
-
-- 局部更新需要先Check之前的文件 然后自己手动选择你更新的资源 最后再按照上面的步骤打包
-
-
-
-
-
-##### 五、 总结
+##### 三、 总结
 
 - 远程资源的更新是采用**整包更新**还是**局部更新**，主要取决于 Addressables Groups 中 `Content Update Restriction` 这个参数的设置。
 - 你可以根据自己项目的实际需求（例如，更新的频率、更新内容的体量、玩家的网络环境等）来选择具体使用哪种更新方式。
 	- 如果更新频率低，每次更新内容较多，或者对打包结果的精细控制要求不高，可以考虑整包更新。
 	- 如果更新频繁，每次更新内容较少，且希望最大程度地节省玩家流量和时间，则应选择局部更新。
+
+
+
+
+
+
+
+
+
+
+
+### 资源加载补充
+
+#### 根据资源定位信息加载资源
+
+意义
+
+1. *资源信息当中提供了一些额外信息* 
+
+	PrimaryKey：资源主键（资源名）
+	InternalId：资源内部ID（资源路径）
+	ResourceType：资源类型（Type可以获取资源类型名）
+	我们可以利用这些信息处理一些特殊需求
+	比如加载多个不同类型资源时 可以通过他们进行判断再分别进行处理
+
+2. *根据资源定位信息加载资源并不会加大我们加载开销*
+
+	查找指定键的资源位置
+	收集依赖项列表
+	下载所需的所有远程AB包
+	将AB包加载到内存中
+	设置Result资源对象的值
+	更新Status状态变量参数并且调用完成事件Completed
+
+	只是将以上步骤拆成两部分而已 并没有增加开销 直接用名字加载也只不过是系统封装好的按定位信息加载资源而已, 本质也是根据定位信息加载
+
+```c#
+//参数一：资源名或者标签名
+//参数二：资源类型
+AsyncOperationHandle<IList<IResourceLocation>> handle = Addressables.LoadResourceLocationsAsync("Cube", typeof(GameObject));
+handle.Completed += (obj) =>
+{
+    if(obj.Status == AsyncOperationStatus.Succeeded)
+    {
+        foreach (var item in obj.Result)
+        {
+            //我们可以利用定位信息 再去加载资源
+            //print(item.PrimaryKey);
+            Addressables.LoadAssetAsync<GameObject>(item).Completed += (obj) =>
+            {
+                Instantiate(obj.Result);
+            };
+        }
+    }
+    else
+    {
+        Addressables.Release(handle);
+    }
+};
+
+
+//参数一：资源名和标签名的组合
+//参数二：合并模式
+//参数三：资源类型
+AsyncOperationHandle<IList<IResourceLocation>> handle2 = Addressables.LoadResourceLocationsAsync(new List<string>() { "Cube", "Sphere", "SD" }, Addressables.MergeMode.Union, typeof(Object));
+handle2.Completed += (obj) => { 
+    if(obj.Status == AsyncOperationStatus.Succeeded)
+    {
+        //资源定位信息加载成功
+        foreach (var item in obj.Result)
+        {
+            //使用定位信息来加载资源
+            //我们可以利用定位信息 再去加载资源
+            print("******");
+            print(item.PrimaryKey);
+            print(item.InternalId);
+            print(item.ResourceType.Name);
+
+            Addressables.LoadAssetAsync<Object>(item).Completed += (obj) =>
+            {
+                //Instantiate(obj.Result);
+            };
+        }
+    }
+    else
+    {
+        Addressables.Release(handle);
+    }
+};
+```
+
+
+
+
+
+#### 使用协程或异步函数加载资源
+
+```c#
+StartCoroutine(LoadAsset());
+
+IEnumerator LoadAsset()
+{
+    handle = Addressables.LoadAssetAsync<GameObject>("Cube");
+    //一定是没有加载成功 再去 yield return
+    if(!handle.IsDone)
+        yield return handle;
+
+    //加载成功 那么久可以使用了
+    if (handle.Status == AsyncOperationStatus.Succeeded)
+    {
+        print("协同程序创建对象");
+        Instantiate(handle.Result);
+    }
+    else
+        Addressables.Release(handle);
+}
+
+Load();
+async void Load()
+{
+    handle = Addressables.LoadAssetAsync<GameObject>("Cube");
+
+    AsyncOperationHandle<GameObject> handle2 = Addressables.LoadAssetAsync<GameObject>("Sphere");
+
+    //单任务等待
+    //await handle.Task;
+
+    //多任务等待
+    await Task.WhenAll(handle.Task, handle2.Task);
+
+    print("异步函数的形式加载的资源");
+    Instantiate(handle.Result);
+    Instantiate(handle2.Result);
+}
+```
+
+
+
+#### Async Operation Handle 相关
+
+##### 获取加载进度
+
+```c#
+StartCoroutine(LoadAsset());
+IEnumerator LoadAsset()
+{
+    AsyncOperationHandle<GameObject> handle = Addressables.LoadAssetAsync<GameObject>("Cube");
+
+    //if (!handle.IsDone)
+    //    yield return handle;
+
+    //注意：如果该资源相关的AB包 已经加载过了 那么 只会打印0
+    while (!handle.IsDone)
+    {
+        DownloadStatus info = handle.GetDownloadStatus();
+        //进度
+        print(info.Percent);
+        //字节加载进度 代表 AB包 加载了多少
+        //当前下载了多少内容 /  总体有多少内容 单位是字节数
+        print(info.DownloadedBytes + "/" + info.TotalBytes);
+        yield return 0;
+    }
+
+    if (handle.Status == AsyncOperationStatus.Succeeded)
+    {
+        Instantiate(handle.Result);
+    }
+    else
+        Addressables.Release(handle);
+}
+```
+
+
+
+##### 强制同步加载资源
+
+不建议使用 直接卡住主线程
+
+```c#
+AsyncOperationHandle<Texture2D> handle = Addressables.LoadAssetAsync<Texture2D>("Cube");
+print("1");
+handle.WaitForCompletion();
+print("2");
+print(handle.Result.name);
+```
+
+
+
+##### 类型强转优化ABMgr
+
+```c#
+AsyncOperationHandle<Texture2D> handle = Addressables.LoadAssetAsync<Texture2D>("Cube");
+AsyncOperationHandle temp = handle;
+//把无类型句柄 转换为 有类型的泛型对象
+handle = temp.Convert<Texture2D>();
+```
+
+
+
+#### 自定义更新目录和下载AB包资源 
+
+
+
+#### 自动检查所有目录是否有更新，并更新目录API
+
+```c#
+Addressables.UpdateCatalogs().Completed += (obj) =>
+{
+    Addressables.Release(obj);
+};
+```
+
+
+
+##### 获取目录列表，再更新目录
+
+```c#
+Addressables.CheckForCatalogUpdates(true).Completed += (obj) =>
+{
+    //如果列表里面的内容大于0 证明有可以更新的目录
+    if(obj.Result.Count > 0)
+    {
+        //根据目录列表更新目录
+        Addressables.UpdateCatalogs(obj.Result, true).Completed += (handle) =>
+        {
+            //如果更新完毕 记得释放资源
+            //Addressables.Release(handle);
+            //Addressables.Release(obj);
+        };
+    }
+};
+```
+
+
+
+##### 预下载
+
+```c#
+StartCoroutine(LoadAsset());
+
+IEnumerator LoadAsset()
+{
+    //1.首先获取下载包的大小
+    //可以传资源名、标签名、或者两者的组合
+    AsyncOperationHandle<long> handleSize = Addressables.GetDownloadSizeAsync(new List<string>() { "Cube", "Sphere", "SD" });
+    yield return handleSize;
+    //2.预下载
+    if(handleSize.Result > 0)
+    {
+        //这样就可以异步加载 所有依赖的AB包相关内容了
+        AsyncOperationHandle handle = Addressables.DownloadDependenciesAsync(new List<string>() { "Cube", "Sphere", "SD" },Addressables.MergeMode.Union);
+        while(!handle.IsDone)
+        {
+            //3.加载进度
+            DownloadStatus info = handle.GetDownloadStatus();
+            print(info.Percent);
+            print(info.DownloadedBytes + "/" + info.TotalBytes);
+            yield return 0;
+        }
+
+        Addressables.Release(handle);
+    } 
+}
+```
+
+
+
+
+
+
+
+### AddressableMgr
+
+```c#
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+//可寻址资源 信息
+public class AddressablesInfo
+{
+    //记录 异步操作句柄
+    public AsyncOperationHandle handle;
+    //记录 引用计数
+    public uint count;
+
+    public AddressablesInfo(AsyncOperationHandle handle)
+    {
+        this.handle = handle;
+        count += 1;
+    }
+}
+
+public class AddressablesMgr
+{
+    private static AddressablesMgr instance = new AddressablesMgr();
+    public static AddressablesMgr Instance => instance;
+
+    //有一个容器 帮助我们存储 异步加载的返回值
+    public Dictionary<string, AddressablesInfo> resDic = new Dictionary<string, AddressablesInfo>();
+
+    private AddressablesMgr() { }
+
+    //异步加载资源的方法
+    public void LoadAssetAsync<T>(string name, Action<AsyncOperationHandle<T>> callBack)
+    {
+        //由于存在同名 不同类型资源的区分加载
+        //所以我们通过名字和类型拼接作为 key
+        string keyName = name + "_" + typeof(T).Name;
+        AsyncOperationHandle<T> handle;
+        //如果已经加载过该资源
+        if (resDic.ContainsKey(keyName))
+        {
+            //获取异步加载返回的操作内容
+            handle = resDic[keyName].handle.Convert<T>();
+            //要使用资源了 那么引用计数+1
+            resDic[keyName].count += 1;
+            //判断 这个异步加载是否结束
+            if(handle.IsDone)
+            {
+                //如果成功 就不需要异步了 直接相当于同步调用了 这个委托函数 传入对应的返回值
+                callBack(handle);
+            }
+            //还没有加载完成
+            else
+            {
+                //如果这个时候 还没有异步加载完成 那么我们只需要 告诉它 完成时做什么就行了
+                handle.Completed += (obj) => {
+                    if (obj.Status == AsyncOperationStatus.Succeeded)
+                        callBack(obj);
+                };
+            }
+            return;
+        }
+        
+        //如果没有加载过该资源
+        //直接进行异步加载 并且记录
+        handle = Addressables.LoadAssetAsync<T>(name);
+        handle.Completed += (obj)=> {
+            if (obj.Status == AsyncOperationStatus.Succeeded)
+                callBack(obj);
+            else
+            {
+                Debug.LogWarning(keyName + "资源加载失败");
+                if(resDic.ContainsKey(keyName))
+                    resDic.Remove(keyName);
+            }
+        };
+        AddressablesInfo info = new AddressablesInfo(handle);
+        resDic.Add(keyName, info);
+    }
+
+    //释放资源的方法 
+    public void Release<T>(string name)
+    {
+        //由于存在同名 不同类型资源的区分加载
+        //所以我们通过名字和类型拼接作为 key
+        string keyName = name + "_" + typeof(T).Name;
+        if(resDic.ContainsKey(keyName))
+        {
+            //释放时 引用计数-1
+            resDic[keyName].count -= 1;
+            //如果引用计数为0  才真正的释放
+            if(resDic[keyName].count == 0)
+            {
+                //取出对象 移除资源 并且从字典里面移除
+                AsyncOperationHandle<T> handle = resDic[keyName].handle.Convert<T>();
+                Addressables.Release(handle);
+                resDic.Remove(keyName);
+            }
+        }
+    }
+
+    //异步加载多个资源 或者 加载指定资源
+    public void LoadAssetAsync<T>(Addressables.MergeMode mode, Action<T> callBack, params string[] keys)
+    {
+        //1.构建一个keyName  之后用于存入到字典中
+        List<string> list = new List<string>(keys);
+        string keyName = "";
+        foreach (string key in list)
+            keyName += key + "_";
+        keyName += typeof(T).Name;
+        //2.判断是否存在已经加载过的内容 
+        //存在做什么
+        AsyncOperationHandle<IList<T>> handle;
+        if (resDic.ContainsKey(keyName))
+        {
+            handle = resDic[keyName].handle.Convert<IList<T>>();
+            //要使用资源了 那么引用计数+1
+            resDic[keyName].count += 1;
+            //异步加载是否结束
+            if (handle.IsDone)
+            {
+                foreach (T item in handle.Result)
+                    callBack(item);
+            }
+            else
+            {
+                handle.Completed += (obj) =>
+                {
+                    //加载成功才调用外部传入的委托函数
+                    if(obj.Status == AsyncOperationStatus.Succeeded)
+                    {
+                        foreach (T item in handle.Result)
+                            callBack(item);
+                    }
+                };
+            }
+            return;
+        }
+        //不存在做什么
+        handle = Addressables.LoadAssetsAsync<T>(list, callBack, mode);
+        handle.Completed += (obj) =>
+        {
+            if(obj.Status == AsyncOperationStatus.Failed)
+            {
+                Debug.LogError("资源加载失败" + keyName);
+                if (resDic.ContainsKey(keyName))
+                    resDic.Remove(keyName);
+            }
+        };
+        AddressablesInfo info = new AddressablesInfo(handle);
+        resDic.Add(keyName, info);
+    }
+
+    public void LoadAssetAsync<T>(Addressables.MergeMode mode, Action<AsyncOperationHandle<IList<T>>> callBack, params string[] keys)
+    {
+
+    }
+
+    public void Release<T>(params string[] keys)
+    {
+        //1.构建一个keyName  之后用于存入到字典中
+        List<string> list = new List<string>(keys);
+        string keyName = "";
+        foreach (string key in list)
+            keyName += key + "_";
+        keyName += typeof(T).Name;
+        
+        if(resDic.ContainsKey(keyName))
+        {
+            resDic[keyName].count -= 1;
+            if(resDic[keyName].count == 0)
+            {
+                //取出字典里面的对象
+                AsyncOperationHandle<IList<T>> handle = resDic[keyName].handle.Convert<IList<T>>();
+                Addressables.Release(handle);
+                resDic.Remove(keyName);
+            }
+            
+        }
+    }
+
+    //清空资源
+    public void Clear()
+    {
+        foreach (var item in resDic.Values)
+        {
+            Addressables.Release(item.handle);
+        }
+        resDic.Clear();
+        AssetBundle.UnloadAllAssetBundles(true);
+        Resources.UnloadUnusedAssets();
+        GC.Collect();
+    }
+}
+
+```
+
+
+
+
+
+### 窗口相关
+
+就是用来看你的Addressable相关信息的比如AB包依赖资源 和AB的引用计数以及是否被释放 用来排查是否资源泄露
+
+还能看你AB包分组是否合理 有没有重复之类的
+
+ 直接看视频吧 文字不好说
+
+
+
+
+
+
+
+
+
+
+
+### 游戏开始前将资源下载到本地(下载 != 加载)
+
+```c#
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
+
+public class HotUpdateManager : MonoBehaviour
+{
+    private void Start()
+    {
+        // 在游戏启动时，开始检查并下载更新
+        StartCoroutine(CheckForUpdates());
+    }
+
+    private IEnumerator CheckForUpdates()
+    {
+        Debug.Log("正在检查资源更新...");
+
+        // 1. 初始化 Addressables 系统
+        AsyncOperationHandle<IResourceLocation> initializeHandle = Addressables.InitializeAsync();
+        yield return initializeHandle;
+        if (initializeHandle.Status == AsyncOperationStatus.Failed)
+        {
+            Debug.LogError("Addressables 初始化失败！");
+            yield break;
+        }
+
+        // 2. 检查是否有新的 Catalog 文件可用
+        AsyncOperationHandle<List<string>> updateHandle = Addressables.CheckForCatalogUpdates();
+        yield return updateHandle;
+
+        if (updateHandle.Status == AsyncOperationStatus.Failed)
+        {
+            Debug.LogError("检查 Catalog 更新失败！");
+            Addressables.Release(updateHandle);
+            yield break;
+        }
+
+        List<string> catalogsToUpdate = updateHandle.Result;
+        Addressables.Release(updateHandle); // 释放检查句柄
+
+        if (catalogsToUpdate.Count > 0)
+        {
+            Debug.Log($"发现 {catalogsToUpdate.Count} 个更新目录，正在更新...");
+            
+            // 3. 下载更新的 Catalog 文件
+            AsyncOperationHandle<List<IResourceLocator>> updateCatalogHandle = Addressables.UpdateCatalogs(catalogsToUpdate);
+            yield return updateCatalogHandle;
+            
+            if (updateCatalogHandle.Status == AsyncOperationStatus.Failed)
+            {
+                Debug.LogError("更新 Catalog 失败！");
+                Addressables.Release(updateCatalogHandle);
+                yield break;
+            }
+
+            Debug.Log("Catalog 更新成功！");
+            Addressables.Release(updateCatalogHandle);
+        }
+        else
+        {
+            Debug.Log("没有发现需要更新的 Catalog。");
+        }
+
+        // 4. 获取需要下载的资源总大小
+        AsyncOperationHandle<long> downloadSizeHandle = Addressables.GetDownloadSizeAsync("All"); // "All" 表示所有分组
+        yield return downloadSizeHandle;
+        
+        long downloadSize = downloadSizeHandle.Result;
+        Addressables.Release(downloadSizeHandle);
+
+        if (downloadSize > 0)
+        {
+            // 5. 下载所有需要更新的依赖文件（即 AssetBundle）
+            Debug.Log($"发现 {downloadSize} 字节的资源需要下载...");
+
+            AsyncOperationHandle downloadHandle = Addressables.DownloadDependenciesAsync("All");
+            while (!downloadHandle.IsDone)
+            {
+                // 获取下载进度
+                DownloadStatus status = downloadHandle.GetDownloadStatus();
+                Debug.Log($"下载进度: {status.Percent * 100:F2}% ({status.DownloadedBytes}/{status.TotalBytes})");
+                yield return null;
+            }
+
+            if (downloadHandle.Status == AsyncOperationStatus.Failed)
+            {
+                Debug.LogError("下载资源失败！");
+                Addressables.Release(downloadHandle);
+                yield break;
+            }
+
+            Debug.Log("所有资源下载成功！");
+            Addressables.Release(downloadHandle);
+        }
+        else
+        {
+            Debug.Log("所有资源已是最新版本，无需下载。");
+        }
+
+        Debug.Log("热更新流程完成，游戏可以继续。");
+    }
+}
+```
+
+
+
+
 
 
 
@@ -10827,6 +11221,68 @@ Unity Input System 提供了一个更直接、更通用的方式来监听**任�
 	- 确保 JSON 文件格式正确，否则 `FromJson` 会报错。
 	- 如果 JSON 文件中的 Action Map 名称与代码中预期的不符，可能会导致问题。
 	- 手动管理 `InputActionAsset` 意味着你需要更细致地处理其生命周期，例如在不再需要时 `Disable()` 或 `Dispose()`。
+
+
+
+
+
+
+
+
+
+## ScriptableObject
+
+### 创建ScriptableObject
+
+两种方法
+
+````c#
+public class ScriptableObjectTool
+{
+    [MenuItem("ScriptableObject/CreateMyData")]
+    public static void CreateMyData()
+    {
+        //书写创建数据资源文件的代码
+        MyData asset = ScriptableObject.CreateInstance<MyData>();
+
+        //通过编辑器API 根据数据创建一个数据资源文件
+        AssetDatabase.CreateAsset(asset, "Assets/Resources/MyDataTest.asset");
+        //保存创建的资源
+        AssetDatabase.SaveAssets();
+        //刷新界面
+        AssetDatabase.Refresh();
+    }
+}
+
+
+
+[CreateAssetMenu(fileName ="MrTangData", menuName ="ScriptableObject/我的数据", order = 0)]
+public class MyData : ScriptableObject
+{
+    //声明成员时需要注意
+    //我们可以声明任何类型的成员变量
+    //但是需要注意：如果希望之后在Inspector窗口中能够编辑它
+    //那你在这里声明的变量规则 要和 MonoBehavior当中public变量的规则是一样的
+
+    public int i;
+    public float f;
+    public bool b;
+
+    public GameObject obj;
+    public Material m;
+    public AudioClip audioClip;
+    public VideoClip videoClip;
+
+}
+````
+
+
+
+### 使用ScriptableObject
+
+1. 挂载或者动态资源加载 里面数据直接用
+2. 注意他的生命周期函数 直接问AI
+3. 编辑器下持久化 打包发布后每次重新运行数据都会重置
 
 
 

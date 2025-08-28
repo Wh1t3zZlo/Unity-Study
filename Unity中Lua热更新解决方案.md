@@ -245,7 +245,7 @@ for (int i = 0; i < strs.Length; ++i)
 }
 ```
 
-注意：AB包依赖，只能记录包与包之前的依赖，而不能记录包内资源自己的依赖。
+注意：AB包依赖，只能记录包与包之间的依赖，而不能记录包内资源自己的依赖。
 
 比如：A包当中的1资源依赖了B、C包，2资源依赖了D、E包，那么A包的依赖就是B、C、D、E，而不能记录1资源依赖了谁，2资源依赖了谁。
 
@@ -2628,8 +2628,6 @@ env.AddLoader(MyCustomLoader);
 
 参数为一个委托
 
-![image-20230820150235836](【唐老狮】Unity中Lua热更新解决方案.assets/image-20230820150235836.png)
-
 注意：customLoaders为一个List，所以可以传入多个自定义加载器，他会遍历调用加载器，一个个调用委托
 
 ## 自定义加载器
@@ -2717,7 +2715,7 @@ public class LuaMgr : BaseManager<LuaMgr>
    
 
     /// <summary>
-    /// 清楚内存对象
+    /// 清除内存对象
     /// </summary>
     public void Tick()
     {
@@ -2784,33 +2782,33 @@ public class LuaMgr : BaseManager<LuaMgr>
     }
    
 
-    /// <summary>
-    /// 自定义AB包加载lua文件
-    /// </summary>
-    /// <param name="filepath"></param>
-    /// <returns></returns>
-    public byte[] MyCustomABLoader(ref string filePath)
-    {
-        // //从AB包中加载lua文件
-        // //加载AB包
-        
-        // string path = Application.streamingAssetsPath + "/lua";
-        // AssetBundle ab = AssetBundle.LoadFromFile(path);
-
-        // //加载Lua文件 返回
-        // TextAsset tx = ab.LoadAsset<TextAsset>(filePath + ".lua");
-        
-        // return tx.bytes;
-
-        TextAsset lua = ABMgr.GetInstance().LoadRes<TextAsset>("/lua", filePath + ".lua");
-
-        if (lua != null) return lua.bytes;
-        else 
+        /// <summary>
+        /// 自定义AB包加载lua文件
+        /// </summary>
+        /// <param name="filepath"></param>
+        /// <returns></returns>
+        public byte[] MyCustomABLoader(ref string filePath)
         {
-            Debug.Log("MyCustomABLoader重定向失败,文件名为" + filePath + ".lua");
-            return null;
-        }
-    }   
+            // //从AB包中加载lua文件
+            // //加载AB包
+
+            // string path = Application.streamingAssetsPath + "/lua";
+            // AssetBundle ab = AssetBundle.LoadFromFile(path);
+
+            // //加载Lua文件 返回
+            // TextAsset tx = ab.LoadAsset<TextAsset>(filePath + ".lua");
+
+            // return tx.bytes;
+
+            TextAsset lua = ABMgr.GetInstance().LoadRes<TextAsset>("/lua", filePath + ".lua");
+
+            if (lua != null) return lua.bytes;
+            else 
+            {
+                Debug.Log("MyCustomABLoader重定向失败,文件名为" + filePath + ".lua");
+                return null;
+            }
+        }   
 }
 ```
 
@@ -3108,7 +3106,7 @@ Dictionary<object, object> dic3 = LuaMgr.GetInstance().Global.Get<Dictionary<obj
 
 # 任务41：类映射table
 
-注意：映射类任然是值拷贝
+注意：映射类仍然是值拷贝
 
 lua文件
 
@@ -3400,7 +3398,7 @@ public class Test
 
 namespace HeHe
 {
-    public classTest2
+    public Test2
     {
         public void Speak(string str)
         {
@@ -4300,7 +4298,7 @@ public class Lesson12
 
 ![image-20250517195001505](typora-image/image-20250517195001505.png)
 
-- **如果不能打图集要取Project Setting里面打开这个 注意指着的那两个选项要关闭**
+- **如果不能打图集要去Project Setting里面打开这个 注意指着的那两个选项要关闭**
 
 
 
@@ -4393,4 +4391,12 @@ public class Lesson12
 
 
 
+
+
+
+
+
+
+
+# Hotfix热补丁
 

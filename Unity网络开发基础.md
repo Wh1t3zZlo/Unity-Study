@@ -6783,7 +6783,7 @@ public class Lesson28E_Test : MonoBehaviour
 
 
 
-### 上传下载高级操作 (没看 现阶段开了也绝逼忘)
+### 上传下载高级操作 (没看 现阶段看了也绝逼忘)
 
 
 
@@ -6791,4 +6791,301 @@ public class Lesson28E_Test : MonoBehaviour
 
 
 
-​	
+
+
+# 第三方协议工具 Protobuf
+
+
+
+## 下载Protobuf
+
+
+
+**1. 准备DLL文件**
+
+这是在Unity中用于解析Protobuf序列化数据的运行时库。你需要获取 `Google.Protobuf.dll` 文件并将其导入Unity项目。
+
+1. **下载源码**：访问 [Protobuf 官网](https://developers.google.com/protocol-buffers)，下载 `protobuf-csharp` 的压缩包。
+2. **生成DLL**：解压后，找到 `csharp\src` 目录下的 `Google.Protobuf.sln` 解决方案文件，用 Visual Studio 打开。
+3. 在 Visual Studio 的**解决方案资源管理器**中，右键点击 **Google.Protobuf** 项目，选择**生成**。
+4. **找到DLL文件**：生成成功后，你可以在 `csharp\src\Google.Protobuf\bin\Debug` 路径下找到不同.NET版本的 `Google.Protobuf.dll` 文件。Unity通常使用 `.NET Framework 4.x` 版本，因此选择 `net45` 文件夹下的 DLL 即可。
+5. **导入Unity**：将这个 `Google.Protobuf.dll` 文件复制到你的 Unity 项目的 `Assets/Plugins` 文件夹中。
+
+------
+
+
+
+### **2. 准备编译器**
+
+`protoc.exe` 是一个命令行工具，它用于将`.proto`协议文件编译成C#代码，供你在Unity中使用。
+
+1. **下载编译器**：在 Protobuf 官网的下载页面，找到 `protoc` 的可执行文件，根据你的操作系统选择 `protoc-版本-win32` 或 `protoc-版本-win64`。
+2. **获取文件**：解压下载的压缩包，你会得到一个 `bin` 文件夹，其中包含了 `protoc.exe` 文件。
+3. **放置编译器**：你可以将 `protoc.exe` 放置在项目的任意位置，例如 Unity 项目根目录下的一个新文件夹，以便于管理。在需要编译 `.proto` 文件时，记住 `protoc.exe` 的存放路径即可。
+
+完成以上两个步骤后，你的 Unity 项目就已经准备好使用 Protobuf 了。接下来你就可以定义 `.proto` 文件，并使用 `protoc.exe` 编译器将其生成为 C# 类，然后在项目中进行数据的序列化和反序列化操作。
+
+
+
+
+
+
+
+## **Protobuf 配置规则总结**
+
+
+
+### **1. 配置文件**
+
+- **文件后缀**：统一使用 `.proto` 作为配置文件后缀。
+- **多文件配置**：可以通过多个 `.proto` 文件来组织配置。
+
+
+
+### **2. 基本语法**
+
+- **注释**：支持两种注释方式：
+	- 单行注释：`//`
+	- 多行注释：`/* ... */`
+- **版本号**：文件的第一行通常需要声明版本号。
+	- `syntax = "proto3";`：指定使用 Protobuf 3 语法。
+	- **重要**：如果不写这行，编译器默认使用 Protobuf 2 语法。
+
+
+
+### **3. 结构定义**
+
+- **命名空间**：
+	- `package 命名空间名;`：用于定义消息类的命名空间，避免命名冲突。
+- **消息类**：
+	- `message 类名 { ... }`：用于定义一个消息结构，它会对应生成编程语言中的一个类。
+- **成员字段**：在 `message` 内部声明字段，格式为 `类型 字段名 = 唯一编号;`。
+
+
+
+### **4. 字段类型与规则**
+
+- **数据类型**：
+	- **浮点数**：`float`, `double`
+	- **整数**：`int32`, `int64`, `uint32`, `uint64`, `fixed32`, `fixed64`, `sfixed32`, `sfixed64`
+	- **其他**：`bool`, `string`, `bytes`
+- **唯一编号**：每个字段都必须有一个从1开始的唯一编号。这些编号用于在二进制数据中标识字段，**一旦定义就不应随意更改**。
+- **特殊标识（仅限 Proto2）**：
+	- `required`：该字段必须被赋值。
+	- `optional`：该字段可以不被赋值。
+	- `repeated`：该字段表示一个数组。
+	- **注意**：在 Proto3 中，`required` 和 `optional` 已经被移除，所有字段默认为`optional`。`repeated` 仍然存在。
+
+
+
+### **5. 其他重要规则**
+
+- **枚举**：
+	- `enum 枚举名 { 常量1 = 0; 常量2 = 1; ... }`
+	- **重要**：枚举中的第一个常量必须映射到 `0`。
+- **默认值**：
+	- `string`：空字符串
+	- `bytes`：空字节
+	- `bool`：`false`
+	- `数值`：`0`
+	- `枚举`：枚举中的第一个值（必须是`0`）。
+	- `message`：取决于目标语言，在 C# 中默认为 `null`。
+- **嵌套**：允许在 `message` 内部定义其他 `message` 或 `enum`。
+- **保留字段**：
+	- `reserved 2, 15;` 或 `reserved 9 to 11;`
+	- `reserved "foo", "bar";`
+	- 用于保留已被删除的字段编号或名称，防止在将来被错误地重新使用，从而导致新旧版本数据不兼容。
+- **导入定义**：
+	- `import "配置文件路径";`
+	- 如果一个 `.proto` 文件需要使用另一个文件中定义的消息类型，必须使用 `import` 关键字导入该文件。
+
+
+
+### **总结**
+
+掌握这些配置规则是使用 Protobuf 的基础。只有正确编写 `.proto` 文件，才能使用 `protoc` 编译器工具将其转换为目标语言（如 C#）的脚本文件，并在程序中进行高效的数据序列化和反序列化。
+
+​		
+
+
+
+## 生成Protobuf的CSharp文件
+
+### 命令行生成protobuf的csharp文件
+
+这是一个通过命令行将 `.proto` 配置文件转换为 C# 脚本文件的过程。
+
+1. **打开命令行窗口**：
+
+	- 启动命令提示符（CMD）或 PowerShell。
+
+2. **进入 `protoc.exe` 所在目录**：
+
+	- 使用 `cd` 命令进入到你存放 `protoc.exe` 文件的文件夹。
+	- **技巧**：你也可以直接将 `protoc.exe` 文件拖到命令行窗口中，这会自动粘贴它的完整路径。
+
+3. **输入转换指令**：
+
+	- 按照以下格式输入并执行命令：
+
+	`protoc.exe -I=[配置路径] --csharp_out=[输出路径] [配置文件名]`
+
+	- **`-I=[配置路径]`**：指定你的 `.proto` 配置文件所在的文件夹路径。
+	- **`--csharp_out=[输出路径]`**：指定生成的 C# 脚本文件应该存放的文件夹路径。
+	- **`[配置文件名]`**：你要转换的 `.proto` 文件的文件名，包括后缀。
+
+4. **注意事项**：
+
+	- 确保你指定的**所有路径中不包含中文或特殊符号**，以免编译器无法正确识别导致生成失败。
+
+
+
+
+
+### 配合编辑器生成protobuf的csharp文件
+
+```c#
+using System.Diagnostics;
+using System.IO;
+using UnityEditor;
+
+public class ProtobufTool
+{
+    //协议配置的路径
+    private static string PROTO_PATH = @"F:\Unity_Project\Protobuf_Teach\Protobuf\Proto";
+    //协议可执行文件的路径
+    private static string PROTOC_PATH = @"F:\Unity_Project\Protobuf_Teach\Protobuf\protoc.exe";
+    //生成的c#脚本路径
+    private static string CSHARP_PATH = @"F:\Unity_Project\Protobuf_Teach\Assets\Scripts\Proto";
+
+    [MenuItem("ProtobufTool/Generate C#")]
+    private static void GenerateCSharp()
+    {
+        //得到文件夹
+        DirectoryInfo directoryInfo = Directory.CreateDirectory(PROTO_PATH);
+        //得到文件夹下的所有文件
+        FileInfo[] files = directoryInfo.GetFiles("*.proto", SearchOption.AllDirectories);
+
+        for (int i = 0; i < files.Length; i++)
+        {
+            //根据文件内容 生成对应的c#脚本
+            Process cmd = new Process();
+            cmd.StartInfo.FileName = PROTOC_PATH;
+
+            //必须有这两句 不然会报错 估计是权限问题
+            cmd.StartInfo.CreateNoWindow = true; // 新增：不创建新窗口  
+            cmd.StartInfo.UseShellExecute = false; // 新增：不使用系统外壳程序启动
+
+            cmd.StartInfo.Arguments = $"-I={PROTO_PATH} --csharp_out={CSHARP_PATH} {files[i].FullName}";
+            //cmd.StartInfo.Arguments = $"-I={PROTO_PATH} --cpp_out={CSHARP_PATH} {files[i].FullName}"; //生成c++代码
+
+            cmd.Start();
+            cmd.WaitForExit();
+
+            UnityEngine.Debug.Log(files[i].FullName + "生成成功");
+        }
+
+        AssetDatabase.Refresh();
+        UnityEngine.Debug.Log("所有文件生成成功");
+    }
+}
+```
+
+
+
+
+
+## Protobuf的序列化与反序列化
+
+
+
+### 基本使用
+
+```c#
+#region 知识点一 序列化存储为本地文件
+using (FileStream fs = File.Create(Application.persistentDataPath + "/TestMsg.hhh"))
+{
+    msg.WriteTo(fs);
+}
+#endregion
+
+#region 知识点二 反序列化本地文件
+//主要使用
+//1.生成的类中的 Parser.ParseFrom方法
+//2.文件流FileStream对象
+using (FileStream fs = File.OpenRead(Application.persistentDataPath + "/TestMsg.hhh"))
+{
+    TestMsg msg2 = null;
+    msg2 = TestMsg.Parser.ParseFrom(fs);
+}
+#endregion
+
+#region 知识点三 得到序列化后的字节数组
+//主要使用
+//1.生成的类中的 WriteTo方法
+//2.内存流MemoryStream对象
+byte[] bytes = null;
+bytes = msg.ToByteArray();	//其实这一行就够了 
+using (MemoryStream ms = new MemoryStream())
+{
+    msg.WriteTo(ms);
+    bytes = ms.ToArray();
+    print("字节数组长度" + bytes.Length);
+}
+
+#endregion
+
+#region 知识点四 从字节数组反序列化
+//主要使用
+//1.生成的类中的 Parser.ParseFrom方法
+//2.内存流MemoryStream对象
+TestMsg msg2 = TestMsg.Parser.ParserFrom(bytes);	//其实这一行就够了 
+using (MemoryStream ms = new MemoryStream(bytes))
+{
+    print("内存流当中反序列化的内容");
+    TestMsg msg2 = TestMsg.Parser.ParseFrom(ms);
+}
+```
+
+
+
+### 工具类
+
+```c#
+public static class NetTool 
+{
+    //序列化Protobuf生成的对象
+    public static byte[] GetProtoBytes( IMessage msg )
+    {
+        //通过该拓展方法 就可以直接获取对应对象的 字节数组了
+        return msg.ToByteArray();
+    }
+
+    /// <summary>
+    /// 反序列化字节数组为Protobuf相关的对象
+    /// </summary>
+    /// <typeparam name="T">想要获取的消息类型</typeparam>
+    /// <param name="bytes">对应的字节数组 用于反序列化</param>
+    /// <returns></returns>
+    public static T GetProtoMsg<T>(byte[] bytes) where T:class, IMessage
+    {
+        //泛型 C#进阶
+        //反射 C#进阶
+        //得到对应消息的类型 通过反射得到内部的静态成员 然后得到其中的 对应方法
+        //进行反序列化
+        Type type = typeof(T);
+        //通过反射 得到对应的 静态成员属性对象
+        PropertyInfo pInfo = type.GetProperty("Parser");
+        object parserObj = pInfo.GetValue(null, null);
+        //已经得到了对象 那么可以得到该对象中的 对应方法 
+        Type parserType = parserObj.GetType();
+        //这是指定得到某一个重载函数
+        MethodInfo mInfo = parserType.GetMethod("ParseFrom", new Type[] { typeof(byte[]) });
+        //调用对应的方法 反序列化为指定的对象
+        object msg = mInfo.Invoke(parserObj, new object[] { bytes });
+        return msg as T;
+    }
+}
+
+```
+
